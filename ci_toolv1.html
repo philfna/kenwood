@@ -223,8 +223,8 @@ body {
   flex-shrink: 0;
 }
 
-.price-dealer { font-size: 15px; font-weight: 700; color: var(--kw-dark); }
-.price-list { font-size: 11px; color: var(--kw-muted); }
+.price-list { font-size: 15px; font-weight: 700; color: var(--kw-dark); }
+.price-dealer { font-size: 11px; color: var(--kw-muted); }
 
 .product-desc {
   font-size: 12px;
@@ -643,8 +643,8 @@ function productCard(item, category) {
         <span class="category-tag">${category}</span>
       </div>
       <div class="product-prices">
-        <div class="price-dealer">${fmt(item.c)}</div>
-        <div class="price-list">List: ${fmt(item.l)}</div>
+        <div class="price-list">${fmt(item.l)}</div>
+        <div class="price-dealer">Cost: ${fmt(item.c)}</div>
       </div>
     </div>
     <div class="product-desc">${item.d || '—'}</div>
@@ -656,7 +656,7 @@ function productCard(item, category) {
       </div>
       ${inQuote
         ? `<button class="add-btn remove" onclick="removeFromQuote('${item.p}')">✕ Remove</button>
-           <span class="line-total">${fmt(item.c * qty)}</span>`
+           <span class="line-total">${fmt(item.l * qty)}</span>`
         : `<button class="add-btn" onclick="addToQuote('${item.p}','${escape(item.d)}',${item.c},${item.l},'${category}')">+ Add to Quote</button>`
       }
     </div>
@@ -704,7 +704,7 @@ function removeFromQuote(pn) {
 
 function updateBadge() {
   const totalItems = state.quote.reduce((s,i) => s+i.qty, 0);
-  const totalCost = state.quote.reduce((s,i) => s + i.cost*i.qty, 0);
+  const totalCost = state.quote.reduce((s,i) => s + i.list*i.qty, 0);
   document.getElementById('quoteItemCount').textContent = totalItems;
   document.getElementById('quoteTotalHeader').textContent = fmt(totalCost);
 }
@@ -755,9 +755,9 @@ function renderQuote() {
     html += `<table class="quote-table">
       <thead><tr>
         <th>Part Number</th><th>Description</th><th>Category</th>
-        <th style="text-align:right">Dealer Cost</th><th style="text-align:right">List Price</th>
+        <th style="text-align:right">List Price</th><th style="text-align:right">Dealer Cost</th>
         <th style="text-align:center">Qty</th>
-        <th style="text-align:right">Ext. Cost</th><th style="text-align:right">Ext. List</th>
+        <th style="text-align:right">Ext. List</th><th style="text-align:right">Ext. Cost</th>
         <th></th>
       </tr></thead><tbody>`;
 
@@ -771,22 +771,22 @@ function renderQuote() {
         <td class="pn-cell">${item.part}</td>
         <td>${item.desc || '—'}</td>
         <td><span class="category-tag">${item.category}</span></td>
-        <td class="num-cell">${fmt(item.cost)}</td>
         <td class="num-cell">${fmt(item.list)}</td>
+        <td class="num-cell">${fmt(item.cost)}</td>
         <td style="text-align:center">
           <input class="qty-input" type="number" min="1" value="${item.qty}" style="width:50px;border:1px solid #ddd;border-radius:4px"
             onchange="syncQty('${item.part}',this.value)">
         </td>
-        <td class="num-cell">${fmt(ec)}</td>
         <td class="num-cell">${fmt(el)}</td>
+        <td class="num-cell">${fmt(ec)}</td>
         <td><button class="add-btn remove" style="padding:4px 8px;font-size:11px" onclick="removeFromQuote('${item.part}')">✕</button></td>
       </tr>`;
     });
 
     html += `<tr class="total-row" style="border-top:2px solid var(--kw-dark)">
       <td colspan="6" style="text-align:right;font-weight:700">SUBTOTAL</td>
-      <td class="num-cell" style="font-weight:700">${fmt(totalCost)}</td>
       <td class="num-cell" style="font-weight:700">${fmt(totalList)}</td>
+      <td class="num-cell" style="font-weight:700">${fmt(totalCost)}</td>
       <td></td>
     </tr>`;
 
@@ -805,8 +805,8 @@ function renderQuote() {
       const discLabel = di.discountType === 'pct' ? `Discount (${di.discountPct}%)` : 'Discount';
       html += `<tr style="color:var(--kw-accent)">
         <td colspan="6" style="text-align:right;font-weight:600">${discLabel}</td>
-        <td class="num-cell" style="font-weight:600">-${fmt(discCostAmt)}</td>
         <td class="num-cell" style="font-weight:600">-${fmt(discListAmt)}</td>
+        <td class="num-cell" style="font-weight:600">-${fmt(discCostAmt)}</td>
         <td></td>
       </tr>`;
 
@@ -814,8 +814,8 @@ function renderQuote() {
       const netList = totalList - discListAmt;
       html += `<tr class="total-row">
         <td colspan="6" style="text-align:right">TOTAL</td>
-        <td class="num-cell">${fmt(netCost)}</td>
         <td class="num-cell">${fmt(netList)}</td>
+        <td class="num-cell">${fmt(netCost)}</td>
         <td></td>
       </tr>`;
     }
@@ -871,7 +871,7 @@ function exportExcel() {
   ];
 
   // Column headers
-  const colHeaders = ['Part Number','Description','Category','Dealer Cost','List Price','Qty','Ext. Dealer Cost','Ext. List Price'];
+  const colHeaders = ['Part Number','Description','Category','List Price','Dealer Cost','Qty','Ext. List Price','Ext. Dealer Cost'];
   headerRows.push(colHeaders);
 
   // Data rows
@@ -881,12 +881,12 @@ function exportExcel() {
     const el = Math.round(item.list * item.qty * 100) / 100;
     totalCost += ec;
     totalList += el;
-    headerRows.push([item.part, item.desc || '', item.category, item.cost, item.list, item.qty, ec, el]);
+    headerRows.push([item.part, item.desc || '', item.category, item.list, item.cost, item.qty, el, ec]);
   });
 
   // Totals
   headerRows.push([]);
-  headerRows.push(['','','','','SUBTOTAL','', Math.round(totalCost*100)/100, Math.round(totalList*100)/100]);
+  headerRows.push(['','','','','SUBTOTAL','', Math.round(totalList*100)/100, Math.round(totalCost*100)/100]);
 
   // Discount
   const di = state.quoteInfo;
@@ -900,10 +900,10 @@ function exportExcel() {
   }
   if (discListAmt > 0 || discCostAmt > 0) {
     const discLabel = di.discountType === 'pct' ? `Discount (${di.discountPct}%)` : 'Discount';
-    headerRows.push(['','','','', discLabel,'', -Math.round(discCostAmt*100)/100, -Math.round(discListAmt*100)/100]);
+    headerRows.push(['','','','', discLabel,'', -Math.round(discListAmt*100)/100, -Math.round(discCostAmt*100)/100]);
     const netCost = Math.round((totalCost - discCostAmt)*100)/100;
     const netList = Math.round((totalList - discListAmt)*100)/100;
-    headerRows.push(['','','','','TOTAL','', netCost, netList]);
+    headerRows.push(['','','','','TOTAL','', netList, netCost]);
   }
 
   const ws = XLSX.utils.aoa_to_sheet(headerRows);
