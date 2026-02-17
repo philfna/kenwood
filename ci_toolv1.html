@@ -1482,142 +1482,146 @@ function cloneQuoteFromSelect() {
 
 // ===== PDF EXPORT =====
 function exportPDF() {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF('l', 'mm', 'letter'); // landscape for wide tables
-  const cv = state.quoteInfo.customerView;
-  const quoteDate = new Date().toLocaleDateString();
+  if (!window.jspdf) {
+    alert('PDF library is still loading. Please wait a moment and try again.\n\nIf this persists, use Print (Ctrl+P) and save as PDF instead.');
+    var s1 = document.createElement('script');
+    s1.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js';
+    s1.onload = function() {
+      var s2 = document.createElement('script');
+      s2.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js';
+      document.head.appendChild(s2);
+    };
+    document.head.appendChild(s1);
+    return;
+  }
+  try {
+    var jsPDF = window.jspdf.jsPDF;
+    var doc = new jsPDF('l', 'mm', 'letter');
+    var cv = state.quoteInfo.customerView;
+    var quoteDate = new Date().toLocaleDateString();
+    var numCols = cv ? 5 : 7;
 
-  // Title
-  doc.setFontSize(18);
-  doc.setFont('helvetica','bold');
-  doc.text('Kenwood LMR Equipment Quote', 14, 18);
+    doc.setFontSize(18);
+    doc.setFont('helvetica','bold');
+    doc.text('Kenwood LMR Equipment Quote', 14, 18);
 
-  // Quote info
-  doc.setFontSize(10);
-  doc.setFont('helvetica','normal');
-  const info = [
-    `Customer: ${state.quoteInfo.customer||'—'}`,
-    `Project: ${state.quoteInfo.project||'—'}`,
-    `Prepared By: ${state.quoteInfo.preparedBy||'—'}`,
-    `Date: ${quoteDate}`,
-    `Pricing: November 2025 Price Guide`
-  ];
-  info.forEach((line, i) => doc.text(line, 14, 28 + i*5));
+    doc.setFontSize(10);
+    doc.setFont('helvetica','normal');
+    var infoLines = [
+      'Customer: ' + (state.quoteInfo.customer||''),
+      'Project: ' + (state.quoteInfo.project||''),
+      'Prepared By: ' + (state.quoteInfo.preparedBy||''),
+      'Date: ' + quoteDate,
+      'Pricing: November 2025 Price Guide'
+    ];
+    for (var ii=0; ii<infoLines.length; ii++) doc.text(infoLines[ii], 14, 28 + ii*5);
 
-  // Build table data
-  const categoryOrder = ['Base Radio','Feature','Antennas','Batteries','Chargers','Speaker Mics','Headsets','Cases & Clips','Cables & Install','Control Heads','Encryption','Power Supplies','RF Amplifiers','Duplexers','Required'];
-  const grouped = {};
-  state.quote.forEach(item => { const c=item.category||'Other'; if(!grouped[c])grouped[c]=[]; grouped[c].push(item); });
-  const sortedCats = Object.keys(grouped).sort((a,b) => {
-    const ia=categoryOrder.indexOf(a),ib=categoryOrder.indexOf(b);
-    return (ia===-1?999:ia)-(ib===-1?999:ib);
-  });
+    var categoryOrder = ['Base Radio','Feature','Antennas','Batteries','Chargers','Speaker Mics','Headsets','Cases & Clips','Cables & Install','Control Heads','Encryption','Power Supplies','RF Amplifiers','Duplexers','Required'];
+    var grp = {};
+    state.quote.forEach(function(item) { var c=item.category||'Other'; if(!grp[c])grp[c]=[]; grp[c].push(item); });
+    var sCats = Object.keys(grp).sort(function(a,b) {
+      var ia=categoryOrder.indexOf(a),ib=categoryOrder.indexOf(b);
+      return (ia===-1?999:ia)-(ib===-1?999:ib);
+    });
 
-  const body = [];
-  let totalSell=0, totalCost=0;
+    var body = [];
+    var totalSell=0, totalCost=0;
 
-  sortedCats.forEach(cat => {
-    let catSell=0, catCost=0;
-    // Category header
-    if (cv) {
-      body.push([{content: getCategoryIcon(cat)+' '+cat, colSpan:4, styles:{fontStyle:'bold',fillColor:[240,240,240]}}]);
-    } else {
-      body.push([{content: getCategoryIcon(cat)+' '+cat, colSpan:7, styles:{fontStyle:'bold',fillColor:[240,240,240]}}]);
-    }
+    sCats.forEach(function(cat) {
+      var cSell=0, cCost=0;
+      body.push([{content: cat, colSpan: numCols, styles:{fontStyle:'bold', fillColor:[240,240,240]}}]);
 
-    grouped[cat].forEach(item => {
-      const mkp = item.markup!=null?item.markup:state.quoteInfo.defaultMarkup;
-      const sell = Math.round(item.cost*(1+mkp/100)*100)/100;
-      const es = sell*item.qty, ec = item.cost*item.qty;
-      totalSell+=es; totalCost+=ec;
-      catSell+=es; catCost+=ec;
+      grp[cat].forEach(function(item) {
+        var mkp = item.markup!=null?item.markup:state.quoteInfo.defaultMarkup;
+        var sell = Math.round(item.cost*(1+mkp/100)*100)/100;
+        var es = sell*item.qty, ec = item.cost*item.qty;
+        totalSell+=es; totalCost+=ec;
+        cSell+=es; cCost+=ec;
+
+        if (cv) {
+          body.push([item.part, (item.desc||'').substring(0,60), fmt(sell), String(item.qty), fmt(es)]);
+        } else {
+          body.push([item.part, (item.desc||'').substring(0,50), fmt(sell), String(item.qty), fmt(es), fmt(ec),
+            (sell>0?((sell-item.cost)/sell*100).toFixed(1):'0')+'%']);
+        }
+      });
 
       if (cv) {
-        body.push([item.part, (item.desc||'').substring(0,60), fmt(sell), item.qty, fmt(es)]);
+        body.push([{content:cat+' Subtotal', colSpan:4, styles:{fontStyle:'bold',halign:'right'}}, {content:fmt(cSell), styles:{fontStyle:'bold',halign:'right'}}]);
       } else {
-        body.push([item.part, (item.desc||'').substring(0,50), fmt(sell), item.qty, fmt(es), fmt(ec),
-          (sell>0?((sell-item.cost)/sell*100).toFixed(1):0)+'%']);
+        var cm2=cSell>0?((cSell-cCost)/cSell*100).toFixed(1):'0';
+        body.push([{content:cat+' Subtotal', colSpan:4, styles:{fontStyle:'bold',halign:'right'}},
+          {content:fmt(cSell),styles:{fontStyle:'bold',halign:'right'}},
+          {content:fmt(cCost),styles:{fontStyle:'bold',halign:'right'}},
+          {content:cm2+'%',styles:{fontStyle:'bold',halign:'right'}}]);
       }
     });
 
-    // Category subtotal
+    // Grand total
     if (cv) {
-      body.push([{content:cat+' Subtotal', colSpan:4, styles:{fontStyle:'bold',halign:'right'}}, {content:fmt(catSell), styles:{fontStyle:'bold',halign:'right'}}]);
+      body.push([{content:'TOTAL', colSpan:4, styles:{fontStyle:'bold',halign:'right',fillColor:[51,51,51],textColor:255}}, {content:fmt(totalSell), styles:{fontStyle:'bold',halign:'right',fillColor:[51,51,51],textColor:255}}]);
     } else {
-      const cm=catSell>0?((catSell-catCost)/catSell*100).toFixed(1):0;
-      body.push([{content:cat+' Subtotal', colSpan:4, styles:{fontStyle:'bold',halign:'right'}},
-        {content:fmt(catSell),styles:{fontStyle:'bold',halign:'right'}},
-        {content:fmt(catCost),styles:{fontStyle:'bold',halign:'right'}},
-        {content:cm+'%',styles:{fontStyle:'bold',halign:'right'}}]);
+      var tm2=totalSell>0?((totalSell-totalCost)/totalSell*100).toFixed(1):'0';
+      body.push([{content:'TOTAL', colSpan:4, styles:{fontStyle:'bold',halign:'right',fillColor:[51,51,51],textColor:255}},
+        {content:fmt(totalSell),styles:{fontStyle:'bold',halign:'right',fillColor:[51,51,51],textColor:255}},
+        {content:fmt(totalCost),styles:{fontStyle:'bold',halign:'right',fillColor:[51,51,51],textColor:255}},
+        {content:tm2+'%',styles:{fontStyle:'bold',halign:'right',fillColor:[51,51,51],textColor:255}}]);
     }
-  });
 
-  // Discount
-  const di = state.quoteInfo;
-  let dSell=0;
-  if(di.discountType==='pct'&&di.discountPct>0) dSell=Math.round(totalSell*di.discountPct)/100;
-  else if(di.discountType==='amt'&&di.discountAmt>0) dSell=di.discountAmt;
-
-  // Columns
-  let head, colStyles;
-  if (cv) {
-    head = [['Part Number','Description','Unit Price','Qty','Extended']];
-    colStyles = {0:{cellWidth:30},1:{cellWidth:90},2:{halign:'right'},3:{halign:'center',cellWidth:15},4:{halign:'right'}};
-  } else {
-    head = [['Part Number','Description','Sell','Qty','Ext. Sell','Ext. Cost','Margin']];
-    colStyles = {0:{cellWidth:28},1:{cellWidth:70},2:{halign:'right'},3:{halign:'center',cellWidth:12},4:{halign:'right'},5:{halign:'right'},6:{halign:'right',cellWidth:18}};
-  }
-
-  doc.autoTable({
-    head: head,
-    body: body,
-    startY: 55,
-    theme: 'grid',
-    styles: { fontSize: 8, cellPadding: 2 },
-    headStyles: { fillColor: [51,51,51], textColor: 255, fontStyle: 'bold' },
-    columnStyles: colStyles,
-    didDrawPage: function(data) {
-      doc.setFontSize(7);
-      doc.setTextColor(150);
-      doc.text('Communications International — Kenwood LMR Quote', 14, doc.internal.pageSize.height - 8);
-      doc.text('Page ' + doc.internal.getCurrentPageInfo().pageNumber, doc.internal.pageSize.width - 30, doc.internal.pageSize.height - 8);
+    // Discount
+    var di2 = state.quoteInfo;
+    var dSell2=0;
+    if(di2.discountType==='pct'&&di2.discountPct>0) dSell2=Math.round(totalSell*di2.discountPct)/100;
+    else if(di2.discountType==='amt'&&di2.discountAmt>0) dSell2=di2.discountAmt;
+    if(dSell2>0){
+      var dl2=di2.discountType==='pct'?'Discount ('+di2.discountPct+'%)':'Discount';
+      if(cv){
+        body.push([{content:dl2, colSpan:4, styles:{halign:'right',textColor:[200,0,0]}},{content:'-'+fmt(dSell2), styles:{halign:'right',textColor:[200,0,0]}}]);
+        body.push([{content:'NET TOTAL', colSpan:4, styles:{fontStyle:'bold',halign:'right'}},{content:fmt(totalSell-dSell2), styles:{fontStyle:'bold',halign:'right'}}]);
+      } else {
+        body.push([{content:dl2, colSpan:4, styles:{halign:'right',textColor:[200,0,0]}},{content:'-'+fmt(dSell2),styles:{halign:'right',textColor:[200,0,0]}},{content:'',styles:{}},{content:'',styles:{}}]);
+        body.push([{content:'NET TOTAL', colSpan:4, styles:{fontStyle:'bold',halign:'right'}},{content:fmt(totalSell-dSell2),styles:{fontStyle:'bold',halign:'right'}},{content:'',styles:{}},{content:'',styles:{}}]);
+      }
     }
-  });
 
-  // Totals below table
-  let y = doc.lastAutoTable.finalY + 8;
-  doc.setFontSize(11);
-  doc.setFont('helvetica','bold');
-  doc.setTextColor(0);
+    var head2, colStyles2;
+    if (cv) {
+      head2 = [['Part Number','Description','Unit Price','Qty','Extended']];
+      colStyles2 = {0:{cellWidth:32},1:{cellWidth:100},2:{halign:'right',cellWidth:28},3:{halign:'center',cellWidth:15},4:{halign:'right',cellWidth:30}};
+    } else {
+      head2 = [['Part Number','Description','Sell Price','Qty','Ext. Sell','Ext. Cost','Margin']];
+      colStyles2 = {0:{cellWidth:30},1:{cellWidth:75},2:{halign:'right',cellWidth:24},3:{halign:'center',cellWidth:12},4:{halign:'right',cellWidth:28},5:{halign:'right',cellWidth:28},6:{halign:'right',cellWidth:18}};
+    }
 
-  if (dSell > 0) {
-    doc.text(`Subtotal: ${fmt(totalSell)}`, 180, y);
-    const dl = di.discountType==='pct'?`Discount (${di.discountPct}%)`:'Discount';
-    doc.setTextColor(200,0,0);
-    doc.text(`${dl}: -${fmt(dSell)}`, 180, y+6);
-    doc.setTextColor(0);
-    doc.text(`TOTAL: ${fmt(totalSell-dSell)}`, 180, y+12);
-    y += 18;
-  } else {
-    doc.text(`TOTAL: ${fmt(totalSell)}`, 180, y);
-    y += 8;
+    doc.autoTable({
+      head: head2, body: body, startY: 55, theme: 'grid',
+      styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak' },
+      headStyles: { fillColor: [51,51,51], textColor: 255, fontStyle: 'bold' },
+      columnStyles: colStyles2,
+      didDrawPage: function(data) {
+        doc.setFontSize(7); doc.setTextColor(150);
+        doc.text('Communications International  |  Kenwood LMR Quote', 14, doc.internal.pageSize.height - 8);
+        doc.text('Page ' + doc.internal.getCurrentPageInfo().pageNumber, doc.internal.pageSize.width - 30, doc.internal.pageSize.height - 8);
+      }
+    });
+
+    if (state.quoteInfo.notes) {
+      var ny = doc.lastAutoTable.finalY + 10;
+      doc.setFontSize(9); doc.setFont('helvetica','bold'); doc.setTextColor(0);
+      doc.text('Notes:', 14, ny);
+      doc.setFont('helvetica','normal'); doc.setFontSize(8);
+      doc.text(doc.splitTextToSize(state.quoteInfo.notes, 240), 14, ny+5);
+    }
+
+    var fn = 'Kenwood_Quote_' + (state.quoteInfo.customer||'Draft').replace(/[^a-zA-Z0-9]/g,'_') + '_' + quoteDate.replace(/\//g,'-') + '.pdf';
+    doc.save(fn);
+
+  } catch(e) {
+    console.error('PDF export error:', e);
+    alert('PDF export failed: ' + e.message + '\n\nTry Print (Ctrl+P) > Save as PDF instead.');
   }
-
-  // Notes
-  if (state.quoteInfo.notes) {
-    y += 4;
-    doc.setFontSize(9);
-    doc.setFont('helvetica','bold');
-    doc.text('Notes:', 14, y);
-    doc.setFont('helvetica','normal');
-    doc.setFontSize(8);
-    const noteLines = doc.splitTextToSize(state.quoteInfo.notes, 240);
-    doc.text(noteLines, 14, y+5);
-  }
-
-  const filename = `Kenwood_Quote_${(state.quoteInfo.customer||'Draft').replace(/[^a-zA-Z0-9]/g,'_')}_${quoteDate.replace(/\//g,'-')}.pdf`;
-  doc.save(filename);
 }
+
 
 // ===== EXCEL EXPORT =====
 function exportExcel() {
