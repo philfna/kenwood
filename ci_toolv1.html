@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Kenwood LMR Equipment Configurator</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
@@ -588,6 +590,70 @@ body {
   .print-only { display: block !important; }
 }
 .print-only { display: none; }
+
+/* View mode toggle */
+.view-toggle {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--kw-card); border: 1px solid var(--kw-border); border-radius: var(--radius);
+  padding: 10px 20px; margin-bottom: 16px;
+}
+.toggle-switch { position: relative; width: 44px; height: 24px; cursor: pointer; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-track {
+  position: absolute; inset: 0; background: #ccc; border-radius: 12px; transition: 0.2s;
+}
+.toggle-switch input:checked + .toggle-track { background: var(--kw-success); }
+.toggle-track::after {
+  content: ''; position: absolute; width: 18px; height: 18px;
+  left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: 0.2s;
+}
+.toggle-switch input:checked + .toggle-track::after { left: 23px; }
+
+/* Sell price inputs */
+.sell-input {
+  width: 70px; padding: 3px 6px; border: 1px solid var(--kw-border); border-radius: 4px;
+  font-family: inherit; font-size: 12px; text-align: right;
+}
+.sell-input:focus { border-color: var(--kw-mid); outline: none; }
+.margin-pct { font-size: 10px; color: var(--kw-success); font-weight: 600; }
+.margin-pct.low { color: var(--kw-accent); }
+
+/* Quick add search */
+.quick-search-container { position: relative; margin-bottom: 16px; }
+.quick-search-input {
+  width: 100%; padding: 10px 14px 10px 38px;
+  border: 1px solid var(--kw-border); border-radius: 8px;
+  font-size: 14px; font-family: inherit; background: var(--kw-card);
+}
+.quick-search-input:focus { outline: none; border-color: var(--kw-mid); }
+.quick-search-container::before {
+  content: '➕'; position: absolute; left: 12px; top: 50%;
+  transform: translateY(-50%); font-size: 14px;
+}
+.quick-results {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 50;
+  background: var(--kw-card); border: 1px solid var(--kw-border);
+  border-radius: 0 0 8px 8px; box-shadow: var(--shadow-lg);
+  max-height: 300px; overflow-y: auto;
+}
+.quick-result-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 14px; cursor: pointer; border-bottom: 1px solid var(--kw-bg);
+  font-size: 13px; transition: background 0.1s;
+}
+.quick-result-item:hover { background: var(--kw-bg); }
+.quick-result-pn { font-family: 'Courier New', monospace; font-weight: 700; color: var(--kw-mid); }
+.quick-result-desc { flex: 1; margin: 0 12px; color: var(--kw-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.quick-result-price { font-weight: 600; white-space: nowrap; }
+.quick-result-added { color: var(--kw-success); font-size: 11px; font-weight: 600; }
+
+/* Default markup bar */
+.markup-bar {
+  background: var(--kw-card); border: 1px solid var(--kw-border); border-radius: var(--radius);
+  padding: 12px 20px; margin-bottom: 16px;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.markup-bar label { font-size: 13px; font-weight: 600; color: var(--kw-dark); }
 </style>
 </head>
 <body>
@@ -706,8 +772,12 @@ const ACC_MAP = {
 let state = {
   activeView: null,
   activeSeries: null,
-  quote: [], // {part, desc, cost, list, qty, category}
-  quoteInfo: { customer: '', project: '', preparedBy: '', priceCol: 'list', discountPct: 0, discountAmt: 0, discountType: 'pct', notes: '' }
+  quote: [], // {part, desc, cost, list, qty, category, markup}
+  quoteInfo: {
+    customer: '', project: '', preparedBy: '', priceCol: 'list',
+    discountPct: 0, discountAmt: 0, discountType: 'pct',
+    notes: '', defaultMarkup: 30, customerView: false
+  }
 };
 
 // ===== RENDERING =====
@@ -904,7 +974,7 @@ function addToQuote(pn, desc, cost, list, category) {
   if (state.quote.find(q => q.part === pn)) return;
   const qtyEl = document.getElementById('qty_'+pn);
   const qty = qtyEl ? Math.max(1, parseInt(qtyEl.value)||1) : 1;
-  state.quote.push({ part: pn, desc: unescape(desc), cost, list, qty, category });
+  state.quote.push({ part: pn, desc: unescape(desc), cost, list, qty, category, markup: state.quoteInfo.defaultMarkup });
 
   // Dependency enforcement: auto-add required items
   const autoAdded = [];
@@ -921,7 +991,8 @@ function addToQuote(pn, desc, cost, list, category) {
           cost: prod.c,
           list: prod.l,
           qty: qty, // match parent qty
-          category: prod._cat || 'Required'
+          category: prod._cat || 'Required',
+          markup: state.quoteInfo.defaultMarkup
         });
         autoAdded.push(prod.p);
         resolveDeps(prod.p); // recurse for chained deps
@@ -984,10 +1055,11 @@ function filterProducts() {
 // ===== QUOTE VIEW =====
 function renderQuote() {
   const main = document.getElementById('main');
+  const cv = state.quoteInfo.customerView;
 
   let html = `<div class="section-header"><div><h2>📋 Equipment Quote</h2><p>${state.quote.length} line items</p></div></div>`;
 
-  // Save/Load bar
+  // Save/Load bar with Clone
   const savedNames = getSavedQuoteNames();
   html += `<div class="save-load-bar no-print">
     <span style="font-size:13px;font-weight:600;color:var(--kw-dark)">💾</span>
@@ -997,9 +1069,10 @@ function renderQuote() {
       <span style="color:var(--kw-border);font-size:18px">|</span>
       <select id="loadQuoteSelect">
         <option value="">Load saved quote…</option>
-        ${savedNames.map(n => `<option value="${n}">${n}</option>`).join('')}
+        ${savedNames.map(n => '<option value="'+n+'">'+n+'</option>').join('')}
       </select>
       <button class="sync-btn" onclick="loadQuoteFromSelect()">Load</button>
+      <button class="sync-btn" onclick="cloneQuoteFromSelect()">Clone</button>
       <button class="sync-btn" style="color:var(--kw-accent)" onclick="deleteQuoteFromSelect()">Delete</button>
     ` : ''}
     <span class="saved-badge" id="savedBadge"></span>
@@ -1010,159 +1083,191 @@ function renderQuote() {
     <div><label>Customer</label><input type="text" id="qi_customer" value="${state.quoteInfo.customer}" onchange="state.quoteInfo.customer=this.value"></div>
     <div><label>Project Name</label><input type="text" id="qi_project" value="${state.quoteInfo.project}" onchange="state.quoteInfo.project=this.value"></div>
     <div><label>Prepared By</label><input type="text" id="qi_prepby" value="${state.quoteInfo.preparedBy}" onchange="state.quoteInfo.preparedBy=this.value"></div>
-  </div>
-  <div class="discount-bar-container" style="background:var(--kw-card);border:1px solid var(--kw-border);border-radius:var(--radius);padding:14px 20px;margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
-    <span style="font-size:13px;font-weight:600;color:var(--kw-dark)">💰 Discount</span>
-    <div style="display:flex;align-items:center;gap:6px" class="no-print">
-      <select id="discType" style="padding:6px 10px;border:1px solid var(--kw-border);border-radius:6px;font-family:inherit;font-size:13px"
-        onchange="state.quoteInfo.discountType=this.value;renderQuote()">
-        <option value="pct" ${state.quoteInfo.discountType==='pct'?'selected':''}>Percentage (%)</option>
-        <option value="amt" ${state.quoteInfo.discountType==='amt'?'selected':''}>Fixed Amount ($)</option>
-      </select>
-      <input type="number" min="0" step="0.01" id="discValue"
-        value="${state.quoteInfo.discountType==='pct' ? state.quoteInfo.discountPct : state.quoteInfo.discountAmt}"
-        style="width:100px;padding:6px 10px;border:1px solid var(--kw-border);border-radius:6px;font-family:inherit;font-size:13px;text-align:right"
-        oninput="updateDiscount(this.value)"
-        placeholder="${state.quoteInfo.discountType==='pct'?'0':'0.00'}">
-      <span style="font-size:12px;color:var(--kw-muted)">${state.quoteInfo.discountType==='pct'?'% off extended list':'$ off extended list'}</span>
-    </div>
   </div>`;
 
-  // Qty Sync bar (only if there are items)
-  if (state.quote.length > 0) {
-    // Find base radios (items in 'Base Radio' category)
-    const baseRadios = state.quote.filter(q => q.category === 'Base Radio');
-    const baseQty = baseRadios.length > 0 ? baseRadios[0].qty : 0;
+  // Customer View Toggle + Markup + Discount (single bar)
+  html += `<div class="view-toggle no-print">
+    <label class="toggle-switch"><input type="checkbox" ${cv?'checked':''} onchange="state.quoteInfo.customerView=this.checked;renderQuote()"><span class="toggle-track"></span></label>
+    <span style="font-size:13px;font-weight:600;color:var(--kw-dark)">👤 Customer View</span>
+    <span style="font-size:12px;color:var(--kw-muted);flex:1">${cv ? 'Sell prices only — safe to share' : 'Internal — shows cost & margins'}</span>
+  </div>`;
 
+  html += `<div class="markup-bar no-print">
+    <label>💲 Markup</label>
+    <input type="number" min="0" max="200" step="1" value="${state.quoteInfo.defaultMarkup}"
+      style="width:60px;padding:6px 10px;border:1px solid var(--kw-border);border-radius:6px;font-family:inherit;font-size:13px;text-align:right"
+      onchange="setDefaultMarkup(this.value)">
+    <span style="font-size:12px;color:var(--kw-muted)">% over cost</span>
+    <button class="sync-btn" onclick="applyDefaultMarkupToAll()">Apply to All Lines</button>
+    <span style="color:var(--kw-border);font-size:18px;margin:0 4px">|</span>
+    <label>💰 Discount</label>
+    <select id="discType" style="padding:6px 8px;border:1px solid var(--kw-border);border-radius:6px;font-family:inherit;font-size:13px"
+      onchange="state.quoteInfo.discountType=this.value;renderQuote()">
+      <option value="pct" ${state.quoteInfo.discountType==='pct'?'selected':''}>%</option>
+      <option value="amt" ${state.quoteInfo.discountType==='amt'?'selected':''}>$</option>
+    </select>
+    <input type="number" min="0" step="0.01" id="discValue"
+      value="${state.quoteInfo.discountType==='pct' ? state.quoteInfo.discountPct : state.quoteInfo.discountAmt}"
+      style="width:70px;padding:6px 10px;border:1px solid var(--kw-border);border-radius:6px;font-family:inherit;font-size:13px;text-align:right"
+      oninput="updateDiscount(this.value)">
+    <span style="font-size:12px;color:var(--kw-muted)">off sell total</span>
+  </div>`;
+
+  // Qty Sync bar
+  if (state.quote.length > 0) {
+    const baseRadios = state.quote.filter(q => q.category === 'Base Radio');
+    const baseQty = baseRadios.length > 0 ? baseRadios[0].qty : 1;
     html += `<div class="qty-sync-bar no-print">
       <label>🔗 Qty Sync</label>
-      <span style="font-size:12px;color:var(--kw-muted)">Set all line items to:</span>
-      <input type="number" min="1" value="${baseQty || 1}" id="syncQtyValue" style="width:60px;padding:6px 10px;border:1px solid var(--kw-border);border-radius:6px;font-family:inherit;font-size:13px;text-align:center">
-      <button class="sync-btn" onclick="syncAllQty(document.getElementById('syncQtyValue').value)">Apply to All</button>
-      <button class="sync-btn" onclick="syncAllQty(document.getElementById('syncQtyValue').value, 'Feature')">Features Only</button>
-      <button class="sync-btn" onclick="syncAllQty(document.getElementById('syncQtyValue').value, 'accessory')">Accessories Only</button>
+      <input type="number" min="1" value="${baseQty}" id="syncQtyValue" style="width:60px;padding:6px 10px;border:1px solid var(--kw-border);border-radius:6px;font-family:inherit;font-size:13px;text-align:center">
+      <button class="sync-btn" onclick="syncAllQty(document.getElementById('syncQtyValue').value)">All</button>
+      <button class="sync-btn" onclick="syncAllQty(document.getElementById('syncQtyValue').value,'Feature')">Features</button>
+      <button class="sync-btn" onclick="syncAllQty(document.getElementById('syncQtyValue').value,'accessory')">Accessories</button>
     </div>`;
   }
+
+  // Quick-add search
+  html += `<div class="quick-search-container no-print">
+    <input class="quick-search-input" type="text" id="quickSearchInput" placeholder="Quick add — type any part number or keyword…" oninput="quickSearch(this.value)" onfocus="quickSearch(this.value)" onblur="setTimeout(()=>{const el=document.getElementById('quickResults');if(el)el.style.display='none'},200)">
+    <div class="quick-results" id="quickResults" style="display:none"></div>
+  </div>`;
 
   html += `<div class="quote-panel">`;
 
   if (state.quote.length === 0) {
-    html += `<div class="quote-empty"><div style="font-size:48px">📦</div><p>No items in quote yet.<br>Select a product series from the sidebar to get started.</p></div>`;
+    html += `<div class="quote-empty"><div style="font-size:48px">📦</div><p>No items in quote yet.<br>Select a series from the sidebar or use quick-add above.</p></div>`;
   } else {
-    // Group items by category
-    const categoryOrder = ['Base Radio', 'Feature', 'Antennas', 'Batteries', 'Chargers', 'Speaker Mics', 'Headsets', 'Cases & Clips', 'Cables & Install', 'Control Heads', 'Encryption', 'Power Supplies', 'RF Amplifiers', 'Duplexers', 'Required'];
+    const categoryOrder = ['Base Radio','Feature','Antennas','Batteries','Chargers','Speaker Mics','Headsets','Cases & Clips','Cables & Install','Control Heads','Encryption','Power Supplies','RF Amplifiers','Duplexers','Required'];
     const grouped = {};
-    state.quote.forEach(item => {
-      const cat = item.category || 'Other';
-      if (!grouped[cat]) grouped[cat] = [];
-      grouped[cat].push(item);
-    });
-    // Sort categories
+    state.quote.forEach(item => { const c=item.category||'Other'; if(!grouped[c])grouped[c]=[]; grouped[c].push(item); });
     const sortedCats = Object.keys(grouped).sort((a,b) => {
-      const ia = categoryOrder.indexOf(a); const ib = categoryOrder.indexOf(b);
-      return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+      const ia=categoryOrder.indexOf(a),ib=categoryOrder.indexOf(b);
+      return (ia===-1?999:ia)-(ib===-1?999:ib);
     });
 
-    html += `<table class="quote-table">
-      <thead><tr>
+    if (cv) {
+      html += `<table class="quote-table"><thead><tr>
         <th>Part Number</th><th>Description</th>
-        <th style="text-align:right">List Price</th><th style="text-align:right">Dealer Cost</th>
-        <th style="text-align:center">Qty</th>
-        <th style="text-align:right">Ext. List</th><th style="text-align:right">Ext. Cost</th>
-        <th class="no-print"></th>
+        <th style="text-align:right">Unit Price</th><th style="text-align:center">Qty</th>
+        <th style="text-align:right">Extended</th>
       </tr></thead><tbody>`;
+    } else {
+      html += `<table class="quote-table"><thead><tr>
+        <th>Part Number</th><th>Description</th>
+        <th style="text-align:right">List</th><th style="text-align:right">Cost</th>
+        <th style="text-align:center" class="no-print">Mkp%</th>
+        <th style="text-align:right">Sell</th><th style="text-align:center">Qty</th>
+        <th style="text-align:right">Ext. Sell</th><th style="text-align:right">Ext. Cost</th>
+        <th style="text-align:right">Margin</th><th class="no-print"></th>
+      </tr></thead><tbody>`;
+    }
 
-    let totalCost = 0, totalList = 0;
+    let totalCost=0, totalSell=0, totalList=0;
 
     sortedCats.forEach(cat => {
       const items = grouped[cat];
-      let catList = 0, catCost = 0;
-
-      // Group header
-      html += `<tr class="group-header-row"><td colspan="8">${getCategoryIcon(cat)} ${cat} (${items.length})</td></tr>`;
+      let catSell=0, catCost=0;
+      const cs = cv ? 5 : 11;
+      html += `<tr class="group-header-row"><td colspan="${cs}">${getCategoryIcon(cat)} ${cat} (${items.length})</td></tr>`;
 
       items.forEach(item => {
-        const ec = item.cost * item.qty;
-        const el = item.list * item.qty;
-        totalCost += ec; totalList += el;
-        catCost += ec; catList += el;
-        html += `<tr>
-          <td class="pn-cell">${item.part}${DEPS[item.part] ? ' <span title="Requires: '+DEPS[item.part].join(', ')+'" style="cursor:help">⚡</span>' : ''}</td>
-          <td style="max-width:300px">${item.desc || '—'}</td>
-          <td class="num-cell">${fmt(item.list)}</td>
-          <td class="num-cell">${fmt(item.cost)}</td>
-          <td style="text-align:center">
-            <input class="qty-input" type="number" min="1" value="${item.qty}" style="width:50px;border:1px solid #ddd;border-radius:4px"
-              onchange="syncQty('${item.part}',this.value)">
-          </td>
-          <td class="num-cell">${fmt(el)}</td>
-          <td class="num-cell">${fmt(ec)}</td>
-          <td class="no-print"><button class="add-btn remove" style="padding:4px 8px;font-size:11px" onclick="removeFromQuote('${item.part}')">✕</button></td>
-        </tr>`;
+        const mkp = item.markup!=null ? item.markup : state.quoteInfo.defaultMarkup;
+        const sell = Math.round(item.cost*(1+mkp/100)*100)/100;
+        const ec = item.cost*item.qty, es = sell*item.qty, el = item.list*item.qty;
+        totalCost+=ec; totalSell+=es; totalList+=el;
+        catCost+=ec; catSell+=es;
+        const mp = sell>0?((sell-item.cost)/sell*100).toFixed(1):0;
+
+        if (cv) {
+          html += `<tr>
+            <td class="pn-cell">${item.part}</td>
+            <td style="max-width:350px">${item.desc||'—'}</td>
+            <td class="num-cell">${fmt(sell)}</td>
+            <td style="text-align:center">${item.qty}</td>
+            <td class="num-cell">${fmt(es)}</td></tr>`;
+        } else {
+          html += `<tr>
+            <td class="pn-cell">${item.part}${DEPS[item.part]?' <span title="Requires: '+DEPS[item.part].join(', ')+'" style="cursor:help">⚡</span>':''}</td>
+            <td style="max-width:220px">${item.desc||'—'}</td>
+            <td class="num-cell">${fmt(item.list)}</td>
+            <td class="num-cell">${fmt(item.cost)}</td>
+            <td style="text-align:center" class="no-print">
+              <input class="sell-input" type="number" min="0" step="1" value="${mkp}" style="width:50px" onchange="setItemMarkup('${item.part}',this.value)">
+            </td>
+            <td class="num-cell" style="font-weight:600">${fmt(sell)}</td>
+            <td style="text-align:center">
+              <input class="qty-input" type="number" min="1" value="${item.qty}" style="width:50px;border:1px solid #ddd;border-radius:4px" onchange="syncQty('${item.part}',this.value)">
+            </td>
+            <td class="num-cell" style="font-weight:600">${fmt(es)}</td>
+            <td class="num-cell">${fmt(ec)}</td>
+            <td class="num-cell"><span class="margin-pct${mp<15?' low':''}">${mp}%</span></td>
+            <td class="no-print"><button class="add-btn remove" style="padding:4px 8px;font-size:11px" onclick="removeFromQuote('${item.part}')">✕</button></td></tr>`;
+        }
       });
 
-      // Group subtotal
-      html += `<tr class="group-subtotal-row">
-        <td colspan="5" style="text-align:right">${cat} Subtotal</td>
-        <td class="num-cell">${fmt(catList)}</td>
-        <td class="num-cell">${fmt(catCost)}</td>
-        <td class="no-print"></td>
-      </tr>`;
+      if (cv) {
+        html += `<tr class="group-subtotal-row"><td colspan="4" style="text-align:right">${cat} Subtotal</td><td class="num-cell">${fmt(catSell)}</td></tr>`;
+      } else {
+        const cm=catSell>0?((catSell-catCost)/catSell*100).toFixed(1):0;
+        html += `<tr class="group-subtotal-row"><td colspan="7" style="text-align:right">${cat} Subtotal</td>
+          <td class="num-cell">${fmt(catSell)}</td><td class="num-cell">${fmt(catCost)}</td>
+          <td class="num-cell"><span class="margin-pct">${cm}%</span></td><td class="no-print"></td></tr>`;
+      }
     });
 
-    html += `<tr class="total-row" style="border-top:2px solid var(--kw-dark)">
-      <td colspan="5" style="text-align:right;font-weight:700">SUBTOTAL</td>
-      <td class="num-cell" style="font-weight:700">${fmt(totalList)}</td>
-      <td class="num-cell" style="font-weight:700">${fmt(totalCost)}</td>
-      <td class="no-print"></td>
-    </tr>`;
-
-    // Discount line
-    const di = state.quoteInfo;
-    let discCostAmt = 0, discListAmt = 0;
-    if (di.discountType === 'pct' && di.discountPct > 0) {
-      discListAmt = Math.round(totalList * di.discountPct) / 100;
-      discCostAmt = Math.round(totalCost * di.discountPct) / 100;
-    } else if (di.discountType === 'amt' && di.discountAmt > 0) {
-      discListAmt = di.discountAmt;
-      discCostAmt = di.discountAmt;
+    // Subtotal
+    if (cv) {
+      html += `<tr class="total-row" style="border-top:2px solid var(--kw-dark)">
+        <td colspan="4" style="text-align:right;font-weight:700">SUBTOTAL</td>
+        <td class="num-cell" style="font-weight:700">${fmt(totalSell)}</td></tr>`;
+    } else {
+      const tm=totalSell>0?((totalSell-totalCost)/totalSell*100).toFixed(1):0;
+      html += `<tr class="total-row" style="border-top:2px solid var(--kw-dark)">
+        <td colspan="7" style="text-align:right;font-weight:700">SUBTOTAL</td>
+        <td class="num-cell" style="font-weight:700">${fmt(totalSell)}</td>
+        <td class="num-cell" style="font-weight:700">${fmt(totalCost)}</td>
+        <td class="num-cell"><span class="margin-pct" style="font-weight:700">${tm}%</span></td>
+        <td class="no-print"></td></tr>`;
     }
 
-    if (discListAmt > 0 || discCostAmt > 0) {
-      const discLabel = di.discountType === 'pct' ? `Discount (${di.discountPct}%)` : 'Discount';
-      html += `<tr style="color:var(--kw-accent)">
-        <td colspan="5" style="text-align:right;font-weight:600">${discLabel}</td>
-        <td class="num-cell" style="font-weight:600">-${fmt(discListAmt)}</td>
-        <td class="num-cell" style="font-weight:600">-${fmt(discCostAmt)}</td>
-        <td class="no-print"></td>
-      </tr>`;
+    // Discount
+    const di = state.quoteInfo;
+    let dSell=0, dCost=0;
+    if(di.discountType==='pct'&&di.discountPct>0){dSell=Math.round(totalSell*di.discountPct)/100;dCost=Math.round(totalCost*di.discountPct)/100;}
+    else if(di.discountType==='amt'&&di.discountAmt>0){dSell=di.discountAmt;dCost=di.discountAmt;}
 
-      const netCost = totalCost - discCostAmt;
-      const netList = totalList - discListAmt;
-      html += `<tr class="total-row">
-        <td colspan="5" style="text-align:right">TOTAL</td>
-        <td class="num-cell">${fmt(netList)}</td>
-        <td class="num-cell">${fmt(netCost)}</td>
-        <td class="no-print"></td>
-      </tr>`;
+    if(dSell>0){
+      const dl=di.discountType==='pct'?`Discount (${di.discountPct}%)`:'Discount';
+      if(cv){
+        html += `<tr style="color:var(--kw-accent)"><td colspan="4" style="text-align:right;font-weight:600">${dl}</td><td class="num-cell" style="font-weight:600">-${fmt(dSell)}</td></tr>`;
+        html += `<tr class="total-row"><td colspan="4" style="text-align:right">TOTAL</td><td class="num-cell">${fmt(totalSell-dSell)}</td></tr>`;
+      } else {
+        const ns=totalSell-dSell, nc=totalCost-dCost, nm=ns>0?((ns-nc)/ns*100).toFixed(1):0;
+        html += `<tr style="color:var(--kw-accent)"><td colspan="7" style="text-align:right;font-weight:600">${dl}</td>
+          <td class="num-cell" style="font-weight:600">-${fmt(dSell)}</td><td class="num-cell" style="font-weight:600">-${fmt(dCost)}</td><td></td><td class="no-print"></td></tr>`;
+        html += `<tr class="total-row"><td colspan="7" style="text-align:right">TOTAL</td>
+          <td class="num-cell">${fmt(ns)}</td><td class="num-cell">${fmt(nc)}</td>
+          <td class="num-cell"><span class="margin-pct" style="font-weight:700">${nm}%</span></td><td class="no-print"></td></tr>`;
+      }
     }
     html += `</tbody></table>`;
   }
   html += '</div>';
 
-  // Notes section
+  // Notes
   html += `<div style="margin-top:16px">
     <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--kw-muted);display:block;margin-bottom:4px">Quote Notes & Conditions</label>
     <textarea class="quote-notes" id="quoteNotes" placeholder="Scope of work, special conditions, delivery terms, exclusions…"
-      onchange="state.quoteInfo.notes=this.value">${state.quoteInfo.notes || ''}</textarea>
+      onchange="state.quoteInfo.notes=this.value">${state.quoteInfo.notes||''}</textarea>
   </div>`;
 
   // Export buttons
   if (state.quote.length > 0) {
     html += `<div class="export-bar no-print">
-      <button class="export-btn secondary" onclick="clearQuote()">🗑️ Clear All</button>
-      <button class="export-btn secondary" onclick="window.print()">🖨️ Print Quote</button>
-      <button class="export-btn primary" onclick="exportExcel()">📊 Export to Excel</button>
+      <button class="export-btn secondary" onclick="clearQuote()">🗑️ Clear</button>
+      <button class="export-btn secondary" onclick="window.print()">🖨️ Print</button>
+      <button class="export-btn secondary" onclick="exportPDF()">📄 PDF</button>
+      <button class="export-btn primary" onclick="exportExcel()">📊 Excel</button>
     </div>`;
   }
 
@@ -1287,12 +1392,239 @@ function deleteQuoteFromSelect() {
   } catch(e) {}
 }
 
+
+// ===== MARKUP & SELL PRICE =====
+function setItemMarkup(pn, val) {
+  val = Math.max(0, parseFloat(val)||0);
+  const item = state.quote.find(q => q.part === pn);
+  if (item) item.markup = val;
+  renderQuote();
+}
+
+function setDefaultMarkup(val) {
+  state.quoteInfo.defaultMarkup = Math.max(0, parseFloat(val)||0);
+}
+
+function applyDefaultMarkupToAll() {
+  const mkp = state.quoteInfo.defaultMarkup;
+  state.quote.forEach(item => { item.markup = mkp; });
+  renderQuote();
+  showToast('<span class="toast-icon">💲</span><span class="toast-body">All lines set to <b>'+mkp+'%</b> markup</span>', 'info', 3000);
+}
+
+// ===== QUICK SEARCH =====
+function quickSearch(query) {
+  const resultsDiv = document.getElementById('quickResults');
+  if (!resultsDiv) return;
+  query = (query||'').trim().toLowerCase();
+  if (query.length < 2) { resultsDiv.style.display = 'none'; return; }
+
+  const matches = [];
+  for (const [pn, prod] of Object.entries(ALL_PRODUCTS)) {
+    if (matches.length >= 12) break;
+    if (pn.toLowerCase().includes(query) || (prod.d||'').toLowerCase().includes(query)) {
+      matches.push(prod);
+    }
+  }
+
+  if (matches.length === 0) {
+    resultsDiv.innerHTML = '<div style="padding:12px 14px;font-size:13px;color:var(--kw-muted)">No matches found</div>';
+  } else {
+    resultsDiv.innerHTML = matches.map(p => {
+      const inQuote = state.quote.find(q => q.part === p.p);
+      return `<div class="quick-result-item" onmousedown="quickAdd('${p.p}')">
+        <span class="quick-result-pn">${p.p}</span>
+        <span class="quick-result-desc">${(p.d||'').substring(0,80)}</span>
+        <span class="quick-result-price">${fmt(p.l)}</span>
+        ${inQuote ? '<span class="quick-result-added">✓ added</span>' : ''}
+      </div>`;
+    }).join('');
+  }
+  resultsDiv.style.display = 'block';
+}
+
+function quickAdd(pn) {
+  const prod = ALL_PRODUCTS[pn];
+  if (!prod) return;
+  if (state.quote.find(q => q.part === pn)) {
+    showToast('<span class="toast-icon">ℹ️</span><span class="toast-body"><b>'+pn+'</b> already in quote</span>', 'warn', 2000);
+    return;
+  }
+  addToQuote(pn, escape(prod.d||''), prod.c, prod.l, prod._cat||'Other');
+  showQuote();
+  setTimeout(() => {
+    const el = document.getElementById('quickSearchInput');
+    if (el) { el.value = ''; el.focus(); }
+  }, 100);
+}
+
+// ===== CLONE QUOTE =====
+function cloneQuoteFromSelect() {
+  const sel = document.getElementById('loadQuoteSelect');
+  if (!sel || !sel.value) return;
+  const name = sel.value;
+  try {
+    const data = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    const saved = data[name];
+    if (!saved) return;
+    // Load the quote data without confirming (it's a clone, we make a copy)
+    state.quote = JSON.parse(JSON.stringify(saved.quote || []));
+    state.quoteInfo = { ...state.quoteInfo, ...JSON.parse(JSON.stringify(saved.quoteInfo || {})) };
+    state.quoteInfo.customer = (state.quoteInfo.customer || '') + ' (Copy)';
+    updateBadge();
+    buildSidebar();
+    showQuote();
+    showToast('<span class="toast-icon">📋</span><span class="toast-body">Cloned <b>'+name+'</b> — edit and save with new name</span>', 'info', 4000);
+  } catch(e) {
+    showToast('<span class="toast-icon">⚠️</span><span class="toast-body">Clone failed: '+e.message+'</span>', 'warn', 4000);
+  }
+}
+
+// ===== PDF EXPORT =====
+function exportPDF() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF('l', 'mm', 'letter'); // landscape for wide tables
+  const cv = state.quoteInfo.customerView;
+  const quoteDate = new Date().toLocaleDateString();
+
+  // Title
+  doc.setFontSize(18);
+  doc.setFont('helvetica','bold');
+  doc.text('Kenwood LMR Equipment Quote', 14, 18);
+
+  // Quote info
+  doc.setFontSize(10);
+  doc.setFont('helvetica','normal');
+  const info = [
+    `Customer: ${state.quoteInfo.customer||'—'}`,
+    `Project: ${state.quoteInfo.project||'—'}`,
+    `Prepared By: ${state.quoteInfo.preparedBy||'—'}`,
+    `Date: ${quoteDate}`,
+    `Pricing: November 2025 Price Guide`
+  ];
+  info.forEach((line, i) => doc.text(line, 14, 28 + i*5));
+
+  // Build table data
+  const categoryOrder = ['Base Radio','Feature','Antennas','Batteries','Chargers','Speaker Mics','Headsets','Cases & Clips','Cables & Install','Control Heads','Encryption','Power Supplies','RF Amplifiers','Duplexers','Required'];
+  const grouped = {};
+  state.quote.forEach(item => { const c=item.category||'Other'; if(!grouped[c])grouped[c]=[]; grouped[c].push(item); });
+  const sortedCats = Object.keys(grouped).sort((a,b) => {
+    const ia=categoryOrder.indexOf(a),ib=categoryOrder.indexOf(b);
+    return (ia===-1?999:ia)-(ib===-1?999:ib);
+  });
+
+  const body = [];
+  let totalSell=0, totalCost=0;
+
+  sortedCats.forEach(cat => {
+    let catSell=0, catCost=0;
+    // Category header
+    if (cv) {
+      body.push([{content: getCategoryIcon(cat)+' '+cat, colSpan:4, styles:{fontStyle:'bold',fillColor:[240,240,240]}}]);
+    } else {
+      body.push([{content: getCategoryIcon(cat)+' '+cat, colSpan:7, styles:{fontStyle:'bold',fillColor:[240,240,240]}}]);
+    }
+
+    grouped[cat].forEach(item => {
+      const mkp = item.markup!=null?item.markup:state.quoteInfo.defaultMarkup;
+      const sell = Math.round(item.cost*(1+mkp/100)*100)/100;
+      const es = sell*item.qty, ec = item.cost*item.qty;
+      totalSell+=es; totalCost+=ec;
+      catSell+=es; catCost+=ec;
+
+      if (cv) {
+        body.push([item.part, (item.desc||'').substring(0,60), fmt(sell), item.qty, fmt(es)]);
+      } else {
+        body.push([item.part, (item.desc||'').substring(0,50), fmt(sell), item.qty, fmt(es), fmt(ec),
+          (sell>0?((sell-item.cost)/sell*100).toFixed(1):0)+'%']);
+      }
+    });
+
+    // Category subtotal
+    if (cv) {
+      body.push([{content:cat+' Subtotal', colSpan:4, styles:{fontStyle:'bold',halign:'right'}}, {content:fmt(catSell), styles:{fontStyle:'bold',halign:'right'}}]);
+    } else {
+      const cm=catSell>0?((catSell-catCost)/catSell*100).toFixed(1):0;
+      body.push([{content:cat+' Subtotal', colSpan:4, styles:{fontStyle:'bold',halign:'right'}},
+        {content:fmt(catSell),styles:{fontStyle:'bold',halign:'right'}},
+        {content:fmt(catCost),styles:{fontStyle:'bold',halign:'right'}},
+        {content:cm+'%',styles:{fontStyle:'bold',halign:'right'}}]);
+    }
+  });
+
+  // Discount
+  const di = state.quoteInfo;
+  let dSell=0;
+  if(di.discountType==='pct'&&di.discountPct>0) dSell=Math.round(totalSell*di.discountPct)/100;
+  else if(di.discountType==='amt'&&di.discountAmt>0) dSell=di.discountAmt;
+
+  // Columns
+  let head, colStyles;
+  if (cv) {
+    head = [['Part Number','Description','Unit Price','Qty','Extended']];
+    colStyles = {0:{cellWidth:30},1:{cellWidth:90},2:{halign:'right'},3:{halign:'center',cellWidth:15},4:{halign:'right'}};
+  } else {
+    head = [['Part Number','Description','Sell','Qty','Ext. Sell','Ext. Cost','Margin']];
+    colStyles = {0:{cellWidth:28},1:{cellWidth:70},2:{halign:'right'},3:{halign:'center',cellWidth:12},4:{halign:'right'},5:{halign:'right'},6:{halign:'right',cellWidth:18}};
+  }
+
+  doc.autoTable({
+    head: head,
+    body: body,
+    startY: 55,
+    theme: 'grid',
+    styles: { fontSize: 8, cellPadding: 2 },
+    headStyles: { fillColor: [51,51,51], textColor: 255, fontStyle: 'bold' },
+    columnStyles: colStyles,
+    didDrawPage: function(data) {
+      doc.setFontSize(7);
+      doc.setTextColor(150);
+      doc.text('Communications International — Kenwood LMR Quote', 14, doc.internal.pageSize.height - 8);
+      doc.text('Page ' + doc.internal.getCurrentPageInfo().pageNumber, doc.internal.pageSize.width - 30, doc.internal.pageSize.height - 8);
+    }
+  });
+
+  // Totals below table
+  let y = doc.lastAutoTable.finalY + 8;
+  doc.setFontSize(11);
+  doc.setFont('helvetica','bold');
+  doc.setTextColor(0);
+
+  if (dSell > 0) {
+    doc.text(`Subtotal: ${fmt(totalSell)}`, 180, y);
+    const dl = di.discountType==='pct'?`Discount (${di.discountPct}%)`:'Discount';
+    doc.setTextColor(200,0,0);
+    doc.text(`${dl}: -${fmt(dSell)}`, 180, y+6);
+    doc.setTextColor(0);
+    doc.text(`TOTAL: ${fmt(totalSell-dSell)}`, 180, y+12);
+    y += 18;
+  } else {
+    doc.text(`TOTAL: ${fmt(totalSell)}`, 180, y);
+    y += 8;
+  }
+
+  // Notes
+  if (state.quoteInfo.notes) {
+    y += 4;
+    doc.setFontSize(9);
+    doc.setFont('helvetica','bold');
+    doc.text('Notes:', 14, y);
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(8);
+    const noteLines = doc.splitTextToSize(state.quoteInfo.notes, 240);
+    doc.text(noteLines, 14, y+5);
+  }
+
+  const filename = `Kenwood_Quote_${(state.quoteInfo.customer||'Draft').replace(/[^a-zA-Z0-9]/g,'_')}_${quoteDate.replace(/\//g,'-')}.pdf`;
+  doc.save(filename);
+}
+
 // ===== EXCEL EXPORT =====
 function exportExcel() {
   const wb = XLSX.utils.book_new();
-
-  // Header info
+  const cv = state.quoteInfo.customerView;
   const quoteDate = new Date().toLocaleDateString();
+
   const headerRows = [
     ['KENWOOD LMR Equipment Quote'],
     [''],
@@ -1304,84 +1636,105 @@ function exportExcel() {
     ['']
   ];
 
-  // Column headers
-  const colHeaders = ['Part Number','Description','Category','List Price','Dealer Cost','Qty','Ext. List Price','Ext. Dealer Cost'];
-  headerRows.push(colHeaders);
+  // Columns differ by view mode
+  if (cv) {
+    headerRows.push(['Part Number','Description','Unit Price','Qty','Extended']);
+  } else {
+    headerRows.push(['Part Number','Description','Category','List Price','Dealer Cost','Markup%','Sell Price','Qty','Ext. Sell','Ext. Cost','Margin%']);
+  }
 
-  // Group items by category (same order as quote view)
-  const categoryOrder = ['Base Radio', 'Feature', 'Antennas', 'Batteries', 'Chargers', 'Speaker Mics', 'Headsets', 'Cases & Clips', 'Cables & Install', 'Control Heads', 'Encryption', 'Power Supplies', 'RF Amplifiers', 'Duplexers', 'Required'];
+  const categoryOrder = ['Base Radio','Feature','Antennas','Batteries','Chargers','Speaker Mics','Headsets','Cases & Clips','Cables & Install','Control Heads','Encryption','Power Supplies','RF Amplifiers','Duplexers','Required'];
   const grouped = {};
-  state.quote.forEach(item => {
-    const cat = item.category || 'Other';
-    if (!grouped[cat]) grouped[cat] = [];
-    grouped[cat].push(item);
-  });
+  state.quote.forEach(item => { const c=item.category||'Other'; if(!grouped[c])grouped[c]=[]; grouped[c].push(item); });
   const sortedCats = Object.keys(grouped).sort((a,b) => {
-    const ia = categoryOrder.indexOf(a); const ib = categoryOrder.indexOf(b);
-    return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+    const ia=categoryOrder.indexOf(a),ib=categoryOrder.indexOf(b);
+    return (ia===-1?999:ia)-(ib===-1?999:ib);
   });
 
-  let totalCost = 0, totalList = 0;
+  let totalCost=0, totalSell=0;
 
   sortedCats.forEach(cat => {
-    // Category header row
-    headerRows.push([`── ${cat} ──`,'','','','','','','']);
+    let catSell=0, catCost=0;
+    if (cv) {
+      headerRows.push([{v:'── '+cat+' ──', s:{font:{bold:true}}},'','','','']);
+    } else {
+      headerRows.push([{v:'── '+cat+' ──', s:{font:{bold:true}}},'','','','','','','','','','']);
+    }
 
-    let catList = 0, catCost = 0;
     grouped[cat].forEach(item => {
-      const ec = Math.round(item.cost * item.qty * 100) / 100;
-      const el = Math.round(item.list * item.qty * 100) / 100;
-      totalCost += ec; totalList += el;
-      catCost += ec; catList += el;
-      headerRows.push([item.part, item.desc || '', cat, item.list, item.cost, item.qty, el, ec]);
+      const mkp = item.markup!=null?item.markup:state.quoteInfo.defaultMarkup;
+      const sell = Math.round(item.cost*(1+mkp/100)*100)/100;
+      const ec = Math.round(item.cost*item.qty*100)/100;
+      const es = Math.round(sell*item.qty*100)/100;
+      totalCost+=ec; totalSell+=es;
+      catCost+=ec; catSell+=es;
+      const mp = sell>0?Math.round((sell-item.cost)/sell*1000)/10:0;
+
+      if (cv) {
+        headerRows.push([item.part, item.desc||'', sell, item.qty, es]);
+      } else {
+        headerRows.push([item.part, item.desc||'', cat, item.list, item.cost, mkp, sell, item.qty, es, ec, mp]);
+      }
     });
 
     // Category subtotal
-    headerRows.push(['','','',`${cat} Subtotal`,'','', Math.round(catList*100)/100, Math.round(catCost*100)/100]);
+    const cm = catSell>0?Math.round((catSell-catCost)/catSell*1000)/10:0;
+    if (cv) {
+      headerRows.push(['','',cat+' Subtotal','', Math.round(catSell*100)/100]);
+    } else {
+      headerRows.push(['','','','','','',cat+' Subtotal','', Math.round(catSell*100)/100, Math.round(catCost*100)/100, cm]);
+    }
   });
 
-  // Grand totals
   headerRows.push([]);
-  headerRows.push(['','','','','SUBTOTAL','', Math.round(totalList*100)/100, Math.round(totalCost*100)/100]);
+
+  // Subtotal
+  if (cv) {
+    headerRows.push(['','','SUBTOTAL','', Math.round(totalSell*100)/100]);
+  } else {
+    headerRows.push(['','','','','','','SUBTOTAL','', Math.round(totalSell*100)/100, Math.round(totalCost*100)/100,
+      totalSell>0?Math.round((totalSell-totalCost)/totalSell*1000)/10:0]);
+  }
 
   // Discount
   const di = state.quoteInfo;
-  let discCostAmt = 0, discListAmt = 0;
-  if (di.discountType === 'pct' && di.discountPct > 0) {
-    discListAmt = Math.round(totalList * di.discountPct) / 100;
-    discCostAmt = Math.round(totalCost * di.discountPct) / 100;
-  } else if (di.discountType === 'amt' && di.discountAmt > 0) {
-    discListAmt = di.discountAmt;
-    discCostAmt = di.discountAmt;
-  }
-  if (discListAmt > 0 || discCostAmt > 0) {
-    const discLabel = di.discountType === 'pct' ? `Discount (${di.discountPct}%)` : 'Discount';
-    headerRows.push(['','','','', discLabel,'', -Math.round(discListAmt*100)/100, -Math.round(discCostAmt*100)/100]);
-    const netCost = Math.round((totalCost - discCostAmt)*100)/100;
-    const netList = Math.round((totalList - discListAmt)*100)/100;
-    headerRows.push(['','','','','TOTAL','', netList, netCost]);
+  let dSell=0, dCost=0;
+  if(di.discountType==='pct'&&di.discountPct>0){dSell=Math.round(totalSell*di.discountPct)/100;dCost=Math.round(totalCost*di.discountPct)/100;}
+  else if(di.discountType==='amt'&&di.discountAmt>0){dSell=di.discountAmt;dCost=di.discountAmt;}
+
+  if(dSell>0){
+    const dl = di.discountType==='pct'?`Discount (${di.discountPct}%)`:'Discount';
+    if (cv) {
+      headerRows.push(['','',dl,'', -Math.round(dSell*100)/100]);
+      headerRows.push(['','','TOTAL','', Math.round((totalSell-dSell)*100)/100]);
+    } else {
+      headerRows.push(['','','','','','',dl,'', -Math.round(dSell*100)/100, -Math.round(dCost*100)/100, '']);
+      const ns=totalSell-dSell, nc=totalCost-dCost;
+      headerRows.push(['','','','','','','TOTAL','', Math.round(ns*100)/100, Math.round(nc*100)/100,
+        ns>0?Math.round((ns-nc)/ns*1000)/10:0]);
+    }
   }
 
   // Notes
   if (state.quoteInfo.notes) {
     headerRows.push([]);
     headerRows.push(['Notes:']);
-    state.quoteInfo.notes.split('\n').forEach(line => {
-      headerRows.push([line]);
-    });
+    state.quoteInfo.notes.split('\n').forEach(line => headerRows.push([line]));
   }
 
   const ws = XLSX.utils.aoa_to_sheet(headerRows);
 
-  // Column widths
-  ws['!cols'] = [
-    {wch:18},{wch:50},{wch:16},{wch:14},{wch:14},{wch:6},{wch:16},{wch:16}
-  ];
+  if (cv) {
+    ws['!cols'] = [{wch:18},{wch:55},{wch:14},{wch:6},{wch:16}];
+  } else {
+    ws['!cols'] = [{wch:18},{wch:45},{wch:15},{wch:12},{wch:12},{wch:8},{wch:12},{wch:6},{wch:14},{wch:14},{wch:10}];
+  }
 
   // Format currency cells
-  const dataStart = 9; // 0-indexed row where data starts (after header)
+  const dataStart = 9;
+  const currCols = cv ? [2,4] : [3,4,6,8,9];
   for (let r = dataStart; r < headerRows.length; r++) {
-    for (let c of [3,4,6,7]) {
+    for (let c of currCols) {
       const addr = XLSX.utils.encode_cell({r:r, c:c});
       if (ws[addr] && typeof ws[addr].v === 'number') {
         ws[addr].z = '$#,##0.00';
@@ -1393,6 +1746,7 @@ function exportExcel() {
   const filename = `Kenwood_Quote_${(state.quoteInfo.customer||'Draft').replace(/[^a-zA-Z0-9]/g,'_')}_${quoteDate.replace(/\//g,'-')}.xlsx`;
   XLSX.writeFile(wb, filename);
 }
+
 
 // ===== PASSWORD GATE =====
 function checkPw() {
