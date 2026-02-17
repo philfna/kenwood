@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kenwood LMR Equipment Configurator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --kw-red: #c8102e;
+  --kw-dark: #1a1a2e;
+  --kw-navy: #16213e;
+  --kw-mid: #0f3460;
+  --kw-accent: #e94560;
+  --kw-bg: #f0f2f5;
+  --kw-card: #ffffff;
+  --kw-border: #dde1e7;
+  --kw-text: #2d3436;
+  --kw-muted: #636e72;
+  --kw-success: #00b894;
+  --kw-warn: #fdcb6e;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
+  --shadow-lg: 0 8px 30px rgba(0,0,0,0.12);
+  --radius: 10px;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  font-family: 'Inter', -apple-system, sans-serif;
+  background: var(--kw-bg);
+  color: var(--kw-text);
+  min-height: 100vh;
+}
+
+/* Header */
+.header {
+  background: linear-gradient(135deg, var(--kw-dark) 0%, var(--kw-navy) 50%, var(--kw-mid) 100%);
+  padding: 0;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: var(--shadow-lg);
+}
+
+.header-inner {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+}
+
+.logo-area {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.logo-mark {
+  width: 40px; height: 40px;
+  background: var(--kw-red);
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+  display: flex; align-items: center; justify-content: center;
+}
+
+.logo-mark span { color: #fff; font-weight: 700; font-size: 16px; }
+
+.logo-text h1 {
+  font-size: 18px; font-weight: 700; color: #fff; letter-spacing: -0.3px;
+}
+.logo-text p {
+  font-size: 11px; color: rgba(255,255,255,0.5); font-weight: 400; letter-spacing: 1.5px; text-transform: uppercase;
+}
+
+.header-actions {
+  display: flex; gap: 10px; align-items: center;
+}
+
+.quote-badge {
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  padding: 6px 14px;
+  border-radius: 20px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.quote-badge strong { color: var(--kw-success); }
+
+/* Layout */
+.app {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 20px 24px 100px;
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 20px;
+}
+
+/* Sidebar */
+.sidebar {
+  position: sticky;
+  top: 80px;
+  height: fit-content;
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+}
+
+.nav-group { margin-bottom: 6px; }
+
+.nav-group-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--kw-muted);
+  padding: 12px 16px 6px;
+  font-weight: 600;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 16px;
+  cursor: pointer;
+  border-radius: 8px;
+  margin: 1px 4px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--kw-text);
+  transition: all 0.15s;
+  border: 1px solid transparent;
+}
+
+.nav-item:hover {
+  background: rgba(0,0,0,0.04);
+}
+
+.nav-item.active {
+  background: var(--kw-card);
+  border-color: var(--kw-border);
+  box-shadow: var(--shadow-sm);
+  color: var(--kw-mid);
+  font-weight: 600;
+}
+
+.nav-icon { font-size: 16px; }
+.nav-count {
+  margin-left: auto;
+  background: var(--kw-bg);
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-size: 11px;
+  color: var(--kw-muted);
+  font-weight: 600;
+}
+
+/* Main Content */
+.main { min-width: 0; }
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.section-header h2 {
+  font-size: 20px; font-weight: 700; color: var(--kw-dark);
+}
+
+.section-header p {
+  font-size: 13px; color: var(--kw-muted);
+}
+
+/* Product Cards */
+.product-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.product-card {
+  background: var(--kw-card);
+  border: 1px solid var(--kw-border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: all 0.15s;
+  cursor: default;
+}
+
+.product-card:hover {
+  border-color: var(--kw-mid);
+  box-shadow: var(--shadow-md);
+}
+
+.product-card.in-quote {
+  border-color: var(--kw-success);
+  background: #f0fdf4;
+}
+
+.product-top {
+  display: flex; justify-content: space-between; align-items: flex-start;
+}
+
+.product-pn {
+  font-size: 14px; font-weight: 700; color: var(--kw-mid);
+  font-family: 'Courier New', monospace;
+}
+
+.product-prices {
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.price-dealer { font-size: 15px; font-weight: 700; color: var(--kw-dark); }
+.price-list { font-size: 11px; color: var(--kw-muted); }
+
+.product-desc {
+  font-size: 12px;
+  color: var(--kw-muted);
+  line-height: 1.4;
+  flex-grow: 1;
+}
+
+.product-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.qty-control {
+  display: flex; align-items: center; gap: 0;
+  border: 1px solid var(--kw-border); border-radius: 6px; overflow: hidden;
+}
+
+.qty-btn {
+  width: 30px; height: 30px;
+  background: var(--kw-bg); border: none; cursor: pointer;
+  font-size: 16px; font-weight: 600; color: var(--kw-text);
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.1s;
+}
+
+.qty-btn:hover { background: #ddd; }
+
+.qty-input {
+  width: 40px; height: 30px; border: none;
+  text-align: center; font-size: 13px; font-weight: 600;
+  font-family: inherit;
+  background: #fff;
+}
+
+.qty-input::-webkit-outer-spin-button,
+.qty-input::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+.add-btn {
+  padding: 6px 14px;
+  background: var(--kw-mid);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+  font-family: inherit;
+}
+
+.add-btn:hover { background: var(--kw-dark); }
+.add-btn.remove { background: var(--kw-accent); }
+.add-btn.remove:hover { background: #d63031; }
+
+.line-total {
+  margin-left: auto;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--kw-success);
+}
+
+/* Quote Panel */
+.quote-panel {
+  background: var(--kw-card);
+  border: 1px solid var(--kw-border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-top: 20px;
+  box-shadow: var(--shadow-md);
+}
+
+.quote-panel h3 {
+  font-size: 16px; font-weight: 700; margin-bottom: 14px;
+  display: flex; align-items: center; gap: 8px;
+}
+
+.quote-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.quote-table th {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 2px solid var(--kw-border);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--kw-muted);
+}
+
+.quote-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--kw-bg);
+}
+
+.quote-table .pn-cell { font-family: 'Courier New', monospace; font-weight: 600; color: var(--kw-mid); }
+.quote-table .num-cell { text-align: right; font-variant-numeric: tabular-nums; }
+.quote-table .total-row td { font-weight: 700; border-top: 2px solid var(--kw-dark); font-size: 14px; }
+.quote-table .total-row .num-cell { color: var(--kw-mid); }
+
+.quote-empty {
+  text-align: center; padding: 40px; color: var(--kw-muted);
+}
+.quote-empty p { font-size: 14px; margin-top: 8px; }
+
+/* Export Bar */
+.export-bar {
+  display: flex; gap: 10px; margin-top: 16px; justify-content: flex-end; align-items: center;
+}
+
+.export-btn {
+  padding: 10px 24px;
+  border-radius: 8px;
+  border: none;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  display: flex; align-items: center; gap: 8px;
+  transition: all 0.15s;
+}
+
+.export-btn.primary {
+  background: var(--kw-success);
+  color: #fff;
+}
+.export-btn.primary:hover { background: #00a381; }
+
+.export-btn.secondary {
+  background: var(--kw-bg);
+  color: var(--kw-text);
+  border: 1px solid var(--kw-border);
+}
+.export-btn.secondary:hover { background: #e0e3e8; }
+
+/* Search */
+.search-box {
+  position: relative;
+  margin-bottom: 16px;
+}
+
+.search-box input {
+  width: 100%;
+  padding: 10px 14px 10px 38px;
+  border: 1px solid var(--kw-border);
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  background: var(--kw-card);
+  transition: border-color 0.15s;
+}
+
+.search-box input:focus { outline: none; border-color: var(--kw-mid); }
+
+.search-box::before {
+  content: '🔍';
+  position: absolute;
+  left: 12px; top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px;
+}
+
+/* Quote info fields */
+.quote-info {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.quote-info label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--kw-muted);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.quote-info input, .quote-info select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--kw-border);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.category-tag {
+  font-size: 10px;
+  padding: 2px 8px;
+  background: var(--kw-bg);
+  border-radius: 4px;
+  color: var(--kw-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Scroll */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
+
+/* Responsive */
+@media (max-width: 900px) {
+  .app { grid-template-columns: 1fr; }
+  .sidebar { position: static; max-height: none; display: flex; flex-wrap: wrap; gap: 4px; }
+  .nav-group { display: contents; }
+  .nav-group-title { display: none; }
+  .nav-item { padding: 6px 12px; font-size: 12px; }
+  .product-grid { grid-template-columns: 1fr; }
+  .quote-info { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-inner">
+    <div class="logo-area">
+      <div class="logo-mark"><span>K</span></div>
+      <div class="logo-text">
+        <h1>KENWOOD Configurator</h1>
+        <p>LMR Equipment Quoting Tool &bull; Nov 2025 Pricing</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <div class="quote-badge" id="quoteBadge">
+        Quote: <strong id="quoteItemCount">0</strong> items &bull; <strong id="quoteTotalHeader">$0.00</strong>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main" id="main"></main>
+</div>
+
+<script>
+// ===== EMBEDDED CATALOG DATA =====
+const CATALOG = {"Portable Radios":{"NX-5200/5300":[{"p":"NX-5200-ISCK2","d":"VHF (136-174MHz), 6.0W, NXDN Conv / TYPE-C Trunking, IS","c":656.7,"l":1094.5},{"p":"NX-5200-ISCK3","d":"VHF (136-174MHz), 6.0W, NXDN Conv / TYPE-C Trunking, Full Key, IS","c":697.2,"l":1162.0},{"p":"NX-5200K2","d":"VHF (136-174MHz), 6.0W, NXDN Conv / TYPE-C Trunking, Std Key","c":656.7,"l":1094.5},{"p":"NX-5200K3","d":"VHF (136-174MHz), 6.0W, NXDN Conv / TYPE-C Trunking, Full Key","c":697.2,"l":1162.0},{"p":"NX-5300-ISCK2","d":"UHF (450-520MHz), 5.0W, NXDN Conv / TYPE-C Trunking, IS","c":656.7,"l":1094.5},{"p":"NX-5300-ISCK3","d":"UHF (450-520MHz), 5.0W, NXDN Conv / TYPE-C Trunking, Full Key, IS","c":697.2,"l":1162.0},{"p":"NX-5300-ISCK5","d":"UHF (380-470MHz), 5.0W, NXDN Conv / TYPE-C Trunking, IS","c":656.7,"l":1094.5},{"p":"NX-5300-ISCK6","d":"UHF (380-470MHz), 5.0W, Full Key, IS","c":697.2,"l":1162.0},{"p":"NX-5300K2","d":"UHF (450-520MHz), 5.0W, NXDN Conv / TYPE-C Trunking, Std Key","c":656.7,"l":1094.5},{"p":"NX-5300K3","d":"UHF (450-520MHz), 5.0W, NXDN Conv / TYPE-C Trunking, Full Key","c":697.2,"l":1162.0},{"p":"NX-5300K5","d":"UHF (380-470MHz), 5.0W, NXDN Conv / TYPE-C Trunking","c":656.7,"l":1094.5},{"p":"NX-5300K6","d":"UHF (380-470MHz), 5.0W, Full Key","c":697.2,"l":1162.0}],"NX-5400":[{"p":"NX-5400-ISCK2","d":"700/800 MHz, 3.0W, NXDN Conv / TYPE-C Trunking, IS","c":656.7,"l":1094.5}],"NX-3200/3300":[{"p":"NX-3200K","d":"VHF (136-174MHz), 5.0W, 64 CH, Basic","c":468.7,"l":781.2},{"p":"NX-3200K2","d":"VHF (136-174MHz), 5.0W, 512 CH, Std Key","c":508.6,"l":847.7},{"p":"NX-3200K3","d":"VHF (136-174MHz), 5.0W, 512 CH, Full Key","c":547.6,"l":912.7},{"p":"NX-3300K","d":"UHF (400-520MHz), 5.0W, 64 CH, Basic","c":468.7,"l":781.2},{"p":"NX-3300K2","d":"UHF (400-520MHz), 5.0W, 512 CH, Std Key","c":508.6,"l":847.7},{"p":"NX-3300K3","d":"UHF (400-520MHz), 5.0W, 512 CH, Full Key","c":547.6,"l":912.7},{"p":"NX-3200-ISCK","d":"VHF, 5.0W, 64 CH, Basic, IS","c":468.7,"l":781.2},{"p":"NX-3200-ISCK2","d":"VHF, 5.0W, 512 CH, Std Key, IS","c":508.6,"l":847.7},{"p":"NX-3200-ISCK3","d":"VHF, 5.0W, 512 CH, Full Key, IS","c":547.6,"l":912.7},{"p":"NX-3300-ISCK","d":"UHF, 5.0W, 64 CH, Basic, IS","c":468.7,"l":781.2},{"p":"NX-3300-ISCK2","d":"UHF, 5.0W, 512 CH, Std Key, IS","c":508.6,"l":847.7},{"p":"NX-3300-ISCK3","d":"UHF, 5.0W, 512 CH, Full Key, IS","c":547.6,"l":912.7}],"NX-3220/3320":[{"p":"NX-3220K","d":"VHF (136-174MHz), 5.0W, 64 CH, Basic","c":372.9,"l":621.5},{"p":"NX-3220K2","d":"VHF (136-174MHz), 5.0W, 260CH, Std Key","c":438.9,"l":731.5},{"p":"NX-3220K3","d":"VHF (136-174MHz), 5.0W, 260CH, Full Key","c":477.7,"l":796.2},{"p":"NX-3320K","d":"UHF (400-520MHz), 5.0W, 64 CH, Basic","c":372.9,"l":621.5},{"p":"NX-3320K2","d":"UHF (400-520MHz), 5.0W, 260CH, Std Key","c":438.9,"l":731.5},{"p":"NX-3320K3","d":"UHF (400-520MHz), 5.0W, 260CH, Full Key","c":477.7,"l":796.2}],"NX-3400/3420":[{"p":"NX-3400K3","d":"800/900MHz, 3.0W, 512 CH, Full Key, NXDN","c":673.1,"l":1121.8},{"p":"NX-3420K3","d":"800/900MHz, 3.0W, 260 CH, Full Key, NXDN","c":521.7,"l":869.5},{"p":"NX-3400-ISCK3","d":"800/900MHz, 3.0W, 512 CH, Full Key, IS","c":673.1,"l":1121.8},{"p":"NX-3420-ISCK3","d":"800/900MHz, 3.0W, 260 CH, Full Key, IS","c":521.7,"l":869.5}],"NX-1200/1300":[{"p":"NX-1200NVBK","d":"VHF, 5W, 64CH, Basic, NXDN/Analog","c":243.5,"l":405.8},{"p":"NX-1200NVBK2","d":"VHF, 5W, 260CH, Std Key, NXDN/Analog","c":304.1,"l":506.8},{"p":"NX-1200NVK3","d":"VHF, 5W, 260CH, Full Key, NXDN/Analog","c":360.7,"l":601.2},{"p":"NX-1200DVBK","d":"VHF, 5W, 64CH, Basic, DMR/Analog","c":243.5,"l":405.8},{"p":"NX-1200DVBK2","d":"VHF, 5W, 260CH, Std Key, DMR/Analog","c":304.1,"l":506.8},{"p":"NX-1200DVK3","d":"VHF, 5W, 260CH, Full Key, DMR/Analog","c":360.7,"l":601.2},{"p":"NX-1200AVBK","d":"VHF, 5W, 64CH, Basic, Analog","c":224.2,"l":373.7},{"p":"NX-1300NUBK","d":"UHF (450-520), 5W, 64CH, Basic, NXDN/Analog","c":243.5,"l":405.8},{"p":"NX-1300NUBK2","d":"UHF (450-520), 5W, 260CH, Std Key, NXDN/Analog","c":304.1,"l":506.8},{"p":"NX-1300NUK3","d":"UHF (450-520), 5W, 260CH, Full Key, NXDN/Analog","c":360.7,"l":601.2},{"p":"NX-1300DUBK","d":"UHF (450-520), 5W, 64CH, Basic, DMR/Analog","c":243.5,"l":405.8},{"p":"NX-1300DUBK2","d":"UHF (450-520), 5W, 260CH, Std Key, DMR/Analog","c":304.1,"l":506.8},{"p":"NX-1300DUK3","d":"UHF (450-520), 5W, 260CH, Full Key, DMR/Analog","c":360.7,"l":601.2},{"p":"NX-1300AUBK","d":"UHF (450-520), 5W, 64CH, Basic, Analog","c":224.2,"l":373.7}]},"Mobile Radios":{"NX-5700/5800/5900":[{"p":"NX-5700K","d":"VHF (136-174MHz), 50W, NXDN/P25/DMR","c":780.3,"l":1300.5},{"p":"NX-5800K","d":"UHF (450-520MHz), 45W, NXDN/P25/DMR","c":780.3,"l":1300.5},{"p":"NX-5800K2","d":"UHF (380-470MHz), 45W, NXDN/P25/DMR","c":780.3,"l":1300.5},{"p":"NX-5900K","d":"700/800 MHz, 30/35W, NXDN/P25","c":994.8,"l":1658.0},{"p":"NX-5700BK","d":"VHF (50W, 136-174 MHz) RF Deck Only","c":573.6,"l":956.0},{"p":"NX-5800BK","d":"UHF (45W, 450-520 MHz) RF Deck Only","c":573.6,"l":956.0},{"p":"NX-5800BK2","d":"UHF (45W, 380-470 MHz) RF Deck Only","c":573.6,"l":956.0},{"p":"NX-5900BK","d":"700/800 MHz, 35W RF Deck Only","c":788.2,"l":1313.7}],"NX-5x00H High Power":[{"p":"NX-5700HBF","d":"VHF 110W High Power Mobile","c":1607.3,"l":2678.8},{"p":"NX-5800HBF","d":"UHF 110W High Power Mobile","c":1607.3,"l":2678.8},{"p":"NX-5800HBF2","d":"UHF (380-470) 110W High Power Mobile","c":1607.3,"l":2678.8},{"p":"NX-5600HBF3","d":"700/800 MHz High Power Mobile","c":1391.5,"l":2319.2}],"NX-3720HG/3820HG":[{"p":"NX-3720HGK","d":"VHF (136-174MHz), 50W, 512 CH","c":541.1,"l":901.8},{"p":"NX-3720HGK-TR","d":"VHF, 50W, 512 CH w/ NXDN Trunking","c":560.8,"l":934.7},{"p":"NX-3820HGK","d":"UHF (450-520MHz), 45W, 512 CH","c":541.1,"l":901.8},{"p":"NX-3820HGK-TR","d":"UHF, 45W, 512 CH w/ NXDN Trunking","c":560.8,"l":934.7},{"p":"NX-3820HGK2","d":"UHF (400-470MHz), 45W, 512 CH","c":541.1,"l":901.8},{"p":"NX-3920GK","d":"800MHz, 15W, 512 CH, NXDN Trunking","c":706.7,"l":1177.8},{"p":"NX-3921GK","d":"900MHz, 15W, 512 CH, NXDN Trunking","c":706.7,"l":1177.8}],"NX-1700H/1800H":[{"p":"NX-1700HAVK","d":"VHF 50W, 260CH, Analog","c":329.0,"l":548.3},{"p":"NX-1700HDVK","d":"VHF 50W, 260CH, DMR/Analog","c":346.5,"l":577.5},{"p":"NX-1700HNVK","d":"VHF 50W, 260CH, NXDN/Analog","c":346.5,"l":577.5},{"p":"NX-1800HAUK2","d":"UHF 45W, 260CH, Analog","c":329.0,"l":548.3},{"p":"NX-1800HDUK2","d":"UHF 45W, 260CH, DMR/Analog","c":346.5,"l":577.5},{"p":"NX-1800HNUK2","d":"UHF 45W, 260CH, NXDN/Analog","c":346.5,"l":577.5}]},"Repeaters":{"NXR-5700/5800/5900":[{"p":"NXR-5700K","d":"Digital Repeater, VHF, 136-174MHz, 25W, TCXO","c":4237.9,"l":7063.2},{"p":"NXR-5800K","d":"Digital Repeater, UHF, 450-520MHz, 25W, TCXO","c":4237.9,"l":7063.2},{"p":"NXR-5800K3","d":"Digital Repeater, UHF, 400-470MHz, 25W, TCXO","c":4237.9,"l":7063.2},{"p":"NXR-5800K5","d":"Digital Repeater, UHF, 350-400MHz, 25W, TCXO","c":4237.9,"l":7063.2},{"p":"NXR-5900K","d":"Digital Repeater, 700/800MHz","c":4569.0,"l":7615.0},{"p":"NXR-5901K","d":"Digital Repeater, 900MHz","c":4569.0,"l":7615.0}],"NXR-1700/1800":[{"p":"NXR-1700E","d":"FM/DMR Repeater, VHF, 136-174MHz, 50W","c":1642.4,"l":2737.3},{"p":"NXR-1800E","d":"FM/DMR Repeater, UHF, 450-520MHz, 40W","c":1642.4,"l":2737.3},{"p":"NXR-1800E2","d":"FM/DMR Repeater, UHF, 400-470MHz, 40W","c":1642.4,"l":2737.3}],"TKR-2500":[{"p":"TKR-2500VM","d":"Trunking 2.5 Repeater, VHF, 136-174MHz, 50W","c":3891.7,"l":6486.2},{"p":"TKR-2500UM","d":"Trunking 2.5 Repeater, UHF, 470-520MHz, 40W","c":3891.7,"l":6486.2},{"p":"TKR-2500UM2","d":"Trunking 2.5 Repeater, UHF, 400-470MHz, 40W","c":3891.7,"l":6486.2}]}};
+
+const FEATURES = {"NX-5000 Features":[{"p":"KWD-5100CV","d":"P25 Conventional License","c":409.9,"l":683.2},{"p":"KWD-5101TR","d":"P25 Phase 1 Trunking License","c":370.7,"l":617.8},{"p":"KWD-5102TR","d":"P25 Phase 2 Trunking (req KWD-5101TR)","c":285.1,"l":475.2},{"p":"KWD-5103RK","d":"P25 OTAR License","c":499.0,"l":831.7},{"p":"KWD-5105VT","d":"P25 Conv Voting Scan License","c":85.6,"l":142.7},{"p":"KWD-5106DT","d":"P25 Trunking OTAR/GPS/OTAP License","c":128.3,"l":213.8},{"p":"KWD-5201TR","d":"NXDN Type-C Trunking License","c":49.9,"l":83.2},{"p":"KWD-5300CV","d":"DMR Tier 2 Conventional License","c":42.8,"l":71.3},{"p":"KWD-5301TR","d":"DMR Tier 3 Trunking (req KWD-5300CV)","c":95.0,"l":158.3},{"p":"KWD-5500EE","d":"DMR ARC4 Enhanced Encryption License","c":28.5,"l":47.5},{"p":"KWD-5000CH","d":"4000 Channel Expansion License","c":299.4,"l":499.0},{"p":"KWD-5001FP","d":"Front Panel Programming License","c":213.8,"l":356.3},{"p":"KWD-5002SD","d":"microSD Memory Card Activation","c":74.8,"l":124.7},{"p":"KWD-5003BT","d":"Bluetooth Data License","c":25.0,"l":41.7},{"p":"KWD-5007RC","d":"Remote Control by Subscriber License","c":28.5,"l":47.5}],"NX-3000 Features":[{"p":"KWD-3501TR","d":"NXDN Type-C Trunking License","c":29.7,"l":49.5},{"p":"KWD-3301CV","d":"DMR Tier 2 Conventional License","c":29.7,"l":49.5},{"p":"KWD-3302TR","d":"DMR Tier 3 Trunking (req KWD-3301CV)","c":71.3,"l":118.8},{"p":"KWD-3502EE","d":"DMR ARC4 Enhanced Encryption License","c":28.5,"l":47.5},{"p":"KWD-3503AE","d":"AES/DES Encryption License","c":320.8,"l":534.7},{"p":"KWD-3505DE","d":"DES Encryption License","c":71.3,"l":118.8},{"p":"KWD-3000CH","d":"1000 Channel Expansion License","c":114.1,"l":190.2},{"p":"KWD-3001FP","d":"Front Panel Programming License","c":89.1,"l":148.5},{"p":"KWD-3002BT","d":"Bluetooth Data License","c":25.0,"l":41.7},{"p":"KWD-3504RC","d":"Remote Control by Subscriber License","c":28.5,"l":47.5}],"NX-1000 Features":[{"p":"KWD-1200CAK","d":"NXDN Conventional Upgrade License","c":29.7,"l":49.5},{"p":"KWD-1201CD","d":"NXDN Conventional Conversion License","c":29.7,"l":49.5},{"p":"KWD-1202TDK","d":"NXDN Type-D Trunking License","c":7.2,"l":12.0},{"p":"KWD-1300CAK","d":"DMR Tier2 Conventional Upgrade","c":29.7,"l":49.5},{"p":"KWD-1301CN","d":"DMR Conventional Conversion License","c":29.7,"l":49.5},{"p":"KWD-1500EE","d":"DMR ARC4 Enhanced Encryption License","c":23.8,"l":39.7},{"p":"KWD-1501RC","d":"Remote Control by Subscriber License","c":23.8,"l":39.7}],"NXR-5000 Features":[{"p":"KWD-NX50VTR","d":"NXR-5000 Vote System License","c":356.4,"l":594.0},{"p":"KPG-D2NK","d":"NXR-5000 Programming Software","c":73.7,"l":122.8},{"p":"KPG-149RM","d":"Repeater Monitoring Software","c":178.2,"l":297.0},{"p":"KXK-3M3","d":"6.25KHz Very Narrow Band HSRO","c":2677.3,"l":4462.2}],"NXR-1000 Features":[{"p":"KWD-NX10DCK","d":"DMR Tier 2 Conventional License","c":293.5,"l":489.2},{"p":"KWD-NX10NCK","d":"NXDN Conventional License","c":275.0,"l":458.3},{"p":"KWD-NX10SPK","d":"SIP Telephone Interface License","c":225.7,"l":376.2},{"p":"KWD-NX10MSK","d":"Multi-site & RF Link License","c":225.7,"l":376.2},{"p":"KWD-NX10VRK","d":"Voting Repeater License","c":396.0,"l":660.0},{"p":"KPG-D7K","d":"Repeater Programming Software","c":73.7,"l":122.8},{"p":"L-1900","d":"Factory Activation (per Repeater)","c":77.8,"l":129.7}],"TKR-2500 Options":[{"p":"KTI-2500M","d":"System Controller Server","c":4290.0,"l":7150.0},{"p":"KWD-2500ASK","d":"AIS Calling Capability (per call)","c":1280.5,"l":2134.2},{"p":"KWD-2500SPK","d":"SIP Calling Capability (per call)","c":1280.5,"l":2134.2},{"p":"KWD-2500GTK","d":"G.711 Transcoder (per call)","c":1766.7,"l":2944.5},{"p":"KWD-2500HAK","d":"High Availability License","c":2136.4,"l":3560.7},{"p":"5452275","d":"IP Mobility Router: Cisco C921-4P","c":1023.4,"l":1705.7}]};
+
+const ACCESSORIES = {"Antennas":[{"p":"KRA-22M","d":"VHF low profile 148-162 MHz","c":13.2,"l":22.0},{"p":"KRA-22M3","d":"VHF low profile 136-150 MHz","c":13.2,"l":22.0},{"p":"KRA-23M","d":"UHF low profile 450-490 MHz","c":13.2,"l":22.0},{"p":"KRA-23M2","d":"UHF low profile 470-520 MHz","c":13.2,"l":22.0},{"p":"KRA-26M","d":"VHF helical 146-162 MHz","c":13.2,"l":22.0},{"p":"KRA-27M","d":"UHF whip 440-490 MHz","c":13.2,"l":22.0},{"p":"KRA-32K","d":"700/800 MHz Whip","c":28.1,"l":46.8},{"p":"KRA-36","d":"700/800 MHz Stubby","c":20.1,"l":33.5},{"p":"KRA-41M","d":"VHF stubby 148-162 MHz","c":11.0,"l":18.3},{"p":"KRA-42M","d":"UHF stubby 440-490 MHz","c":11.0,"l":18.3}],"Batteries":[{"p":"KNB-L1M","d":"Li-ion 2000mAh (Compact Slim)","c":95.0,"l":158.3},{"p":"KNB-L2M","d":"Li-ion 2600mAh (Standard)","c":111.5,"l":185.8},{"p":"KNB-L11M","d":"Li-ion 3900mAh (High Capacity)","c":144.3,"l":240.5},{"p":"KNB-L13M","d":"Laminated Li-ion 4000mAh","c":159.3,"l":266.0},{"p":"KNB-57LAM","d":"2000mAh Li-ion IP67","c":80.1,"l":133.5},{"p":"KNB-78LM","d":"2860mAh Li-ion IP67 (trunked)","c":105.7,"l":176.2},{"p":"KNB-LS5CU","d":"IS Battery Li-ion 2000mAh","c":168.0,"l":280.0},{"p":"KNB-LS7M","d":"IS Battery Li-ion 3800mAh","c":241.6,"l":402.7},{"p":"KNB-45LK","d":"2000mAh Li-ion (NX-1000)","c":52.3,"l":87.2},{"p":"KNB-69L","d":"2550mAh Li-ion (NX-1000)","c":63.0,"l":105.0}],"Chargers":[{"p":"KSC-52BK","d":"Rapid rate single unit charger (NX-5000/3000)","c":64.2,"l":107.0},{"p":"KSC-52AK","d":"Rapid single charger for KNB-L11","c":64.2,"l":107.0},{"p":"KSC-526K","d":"Rapid rate 6-unit charger","c":543.7,"l":906.2},{"p":"KSC-25LSK","d":"100-240V rapid single charger","c":38.8,"l":64.7},{"p":"KSC-35SK","d":"Fast rate single charger (NX-1000)","c":25.3,"l":42.2}],"Speaker Mics":[{"p":"KMC-45D","d":"MIL-SPEC IP54/55 Speaker Mic","c":69.2,"l":115.3},{"p":"KMC-70M","d":"MIL-SPEC IP67 Active Noise Reduction","c":104.5,"l":174.2},{"p":"KMC-72W","d":"MIL-SPEC IP67 Noise-cancelling","c":80.3,"l":133.8},{"p":"KMC-40","d":"MIL-SPEC w/ Antenna Connector","c":297.0,"l":495.0},{"p":"KMC-65M","d":"Standard mobile mic (8-pin)","c":41.9,"l":69.8},{"p":"KMC-66M","d":"Mobile mic w/ 12 keypad (8-pin)","c":76.0,"l":126.7}],"Headsets":[{"p":"KHS-10DC-OH","d":"Heavy-duty over-head, NRR 24dB","c":323.1,"l":538.5},{"p":"KHS-10DC-BH","d":"Heavy-duty behind-head, NRR 24dB","c":302.5,"l":504.2},{"p":"KHS-15D-OH","d":"Heavy-duty noise reduction","c":313.7,"l":522.8},{"p":"KHS-14C","d":"Lightweight single muff w/ PTT","c":93.5,"l":155.8},{"p":"KHS-12BL","d":"3-wire lapel mic w/ earphone","c":170.2,"l":283.7},{"p":"KHS-11BL","d":"2-wire palm mic w/ earphone","c":133.9,"l":223.2}],"Cases & Clips":[{"p":"KLH-200K3","d":"Heavy duty leather case (NX-5000)","c":35.5,"l":59.2},{"p":"KLH-201K3","d":"Nylon case (NX-5000)","c":21.1,"l":35.2},{"p":"KLH-206K3","d":"Leather case Full Keypad (NX-3000)","c":39.3,"l":65.5},{"p":"KLH-207K3","d":"Nylon case Full Keypad (NX-3000)","c":21.1,"l":35.2},{"p":"KBH-10","d":"Spring action belt clip","c":6.6,"l":11.0},{"p":"KBH-11","d":"Spring action belt clip (2.5\")","c":11.8,"l":19.7}],"Cables & Install":[{"p":"KCT-71M2","d":"Remote Control Cable (17 ft)","c":56.4,"l":94.0},{"p":"KCT-71M3","d":"Remote Control Cable (25 ft)","c":64.2,"l":107.0},{"p":"KCT-60M","d":"DB15-to-15pin Molex Adapter","c":23.2,"l":38.7},{"p":"KPG-36XM","d":"USB Programming Cable (Portable)","c":127.4,"l":212.3},{"p":"KPG-46XM","d":"USB Programming Cable (Mobile)","c":127.4,"l":212.3}],"Control Heads":[{"p":"KCH-20RM","d":"Remote Control Head (no speaker)","c":481.6,"l":802.7},{"p":"KCH-21RM","d":"Remote Control Head","c":799.3,"l":1332.2}],"Power Supplies":[{"p":"KEN-4012","d":"DC Power Supply: Duracomm RMF-4012","c":330.0,"l":550.0},{"p":"KSGPS20400","d":"40A 13.8VDC Rack-Mounted PS","c":374.0,"l":623.3},{"p":"KSGPS20701","d":"70A 13.8VDC Rack-Mounted PS","c":943.8,"l":1573.0},{"p":"KSGPS20702","d":"70A 13.8VDC Rack PS w/ SmartCharger","c":1211.8,"l":2019.7}],"RF Amplifiers":[{"p":"KSGPA22415","d":"VHF 3W In, 50-100W Out","c":1700.8,"l":2834.7},{"p":"KSGPA22515","d":"VHF 25W In, 50-100W Out","c":1700.8,"l":2834.7},{"p":"KSGPA23413","d":"UHF 450-512MHz, 3W In, 50-100W Out","c":1823.6,"l":3039.3},{"p":"KSGPA23513","d":"UHF 450-512MHz, 25W In, 50-100W Out","c":1823.6,"l":3039.3},{"p":"KSGPA24181","d":"700/800MHz, 250mW In, 80W Out","c":2019.6,"l":3366.0},{"p":"KSGPA25172","d":"900MHz, 250mW In, 80W Out","c":2019.6,"l":3366.0}],"Duplexers":[{"p":"KSGDX62001","d":"VHF Mobile Duplexer, 148-160MHz, 6 cav","c":651.9,"l":1086.5},{"p":"KSGDX63002","d":"UHF Mobile Duplexer, 450-470MHz, 6 cav","c":534.6,"l":891.0},{"p":"KSGDX23101","d":"4 Cavity UHF BpBr Duplexer 450-470MHz","c":1432.4,"l":2387.3}],"Encryption":[{"p":"KWD-AE30K","d":"AES FIPS140-2 & DES Module","c":682.4,"l":1137.3},{"p":"KWD-AE31K","d":"AES & DES Encryption Module","c":442.3,"l":737.2},{"p":"KPG-AE1K","d":"AES/DES Software Key Loader","c":389.5,"l":649.1}]};
+
+// Feature mapping: which feature sets apply to which series
+const FEATURE_MAP = {
+  "NX-5200/5300":"NX-5000 Features","NX-5400":"NX-5000 Features",
+  "NX-5700/5800/5900":"NX-5000 Features","NX-5x00H High Power":"NX-5000 Features",
+  "NX-3200/3300":"NX-3000 Features","NX-3220/3320":"NX-3000 Features","NX-3400/3420":"NX-3000 Features",
+  "NX-3720HG/3820HG":"NX-3000 Features",
+  "NX-1200/1300":"NX-1000 Features","NX-1700H/1800H":"NX-1000 Features",
+  "NXR-5700/5800/5900":"NXR-5000 Features","NXR-1700/1800":"NXR-1000 Features","TKR-2500":"TKR-2500 Options"
+};
+
+// Accessory mapping
+const ACC_MAP = {
+  "NX-5200/5300":["Antennas","Batteries","Chargers","Speaker Mics","Headsets","Cases & Clips","Cables & Install","Encryption"],
+  "NX-5400":["Antennas","Batteries","Chargers","Speaker Mics","Headsets","Cases & Clips","Cables & Install","Encryption"],
+  "NX-3200/3300":["Antennas","Batteries","Chargers","Speaker Mics","Headsets","Cases & Clips","Cables & Install","Encryption"],
+  "NX-3220/3320":["Antennas","Batteries","Chargers","Speaker Mics","Headsets","Cases & Clips","Cables & Install","Encryption"],
+  "NX-3400/3420":["Antennas","Batteries","Chargers","Speaker Mics","Headsets","Cases & Clips","Cables & Install","Encryption"],
+  "NX-1200/1300":["Antennas","Batteries","Chargers","Speaker Mics","Headsets","Cases & Clips","Cables & Install"],
+  "NX-5700/5800/5900":["Speaker Mics","Cables & Install","Control Heads","Encryption"],
+  "NX-5x00H High Power":["Speaker Mics","Cables & Install","Control Heads","Encryption"],
+  "NX-3720HG/3820HG":["Speaker Mics","Cables & Install","Encryption"],
+  "NX-1700H/1800H":["Speaker Mics","Cables & Install"],
+  "NXR-5700/5800/5900":["Power Supplies","RF Amplifiers","Duplexers"],
+  "NXR-1700/1800":["Power Supplies","RF Amplifiers","Duplexers"],
+  "TKR-2500":["Power Supplies","RF Amplifiers","Duplexers"]
+};
+
+// ===== APP STATE =====
+let state = {
+  activeView: null,
+  activeSeries: null,
+  quote: [], // {part, desc, cost, list, qty, category}
+  quoteInfo: { customer: '', project: '', preparedBy: '', priceCol: 'list' }
+};
+
+// ===== RENDERING =====
+function fmt(n) { return '$' + n.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+
+function buildSidebar() {
+  const sb = document.getElementById('sidebar');
+  let html = '';
+
+  // Equipment categories
+  const cats = [
+    { group: 'Portable Radios', icon: '📻', items: Object.keys(CATALOG['Portable Radios']) },
+    { group: 'Mobile Radios', icon: '🚔', items: Object.keys(CATALOG['Mobile Radios']) },
+    { group: 'Repeaters', icon: '📡', items: Object.keys(CATALOG['Repeaters']) },
+  ];
+
+  cats.forEach(cat => {
+    html += `<div class="nav-group"><div class="nav-group-title">${cat.icon} ${cat.group}</div>`;
+    cat.items.forEach(series => {
+      const items = CATALOG[cat.group][series];
+      const id = `${cat.group}|${series}`;
+      const active = state.activeView === id ? ' active' : '';
+      html += `<div class="nav-item${active}" onclick="selectSeries('${cat.group}','${series}')">
+        <span>${series}</span>
+        <span class="nav-count">${items.length}</span>
+      </div>`;
+    });
+    html += '</div>';
+  });
+
+  // Quote section
+  const qtyItems = state.quote.reduce((s,i) => s + i.qty, 0);
+  html += `<div class="nav-group"><div class="nav-group-title">📋 Quote</div>
+    <div class="nav-item${state.activeView==='quote'?' active':''}" onclick="showQuote()">
+      <span>View Quote</span>
+      <span class="nav-count">${qtyItems}</span>
+    </div></div>`;
+
+  sb.innerHTML = html;
+}
+
+function selectSeries(group, series) {
+  state.activeView = `${group}|${series}`;
+  state.activeSeries = series;
+  buildSidebar();
+  renderMain();
+}
+
+function showQuote() {
+  state.activeView = 'quote';
+  buildSidebar();
+  renderQuote();
+}
+
+function renderMain() {
+  const main = document.getElementById('main');
+  const [group, series] = state.activeView.split('|');
+  const models = CATALOG[group][series];
+  const featureKey = FEATURE_MAP[series];
+  const features = featureKey ? FEATURES[featureKey] : [];
+  const accKeys = ACC_MAP[series] || [];
+
+  let html = '';
+
+  // Search bar
+  html += `<div class="search-box"><input type="text" id="searchInput" placeholder="Search products..." oninput="filterProducts()"></div>`;
+
+  // Base Models
+  html += `<div class="section-header"><div><h2>${series}</h2><p>${group} — Select base model and add options</p></div></div>`;
+  html += `<div class="product-grid" id="baseGrid">`;
+  models.forEach(m => {
+    html += productCard(m, 'Base Radio');
+  });
+  html += '</div>';
+
+  // Features
+  if (features.length > 0) {
+    html += `<div class="section-header" style="margin-top:20px"><div><h2>Software Features & Licenses</h2><p>Compatible feature upgrades for ${series}</p></div></div>`;
+    html += `<div class="product-grid" id="featureGrid">`;
+    features.forEach(m => html += productCard(m, 'Feature'));
+    html += '</div>';
+  }
+
+  // Accessories
+  accKeys.forEach(accCat => {
+    const items = ACCESSORIES[accCat];
+    if (!items) return;
+    html += `<div class="section-header" style="margin-top:20px"><div><h2>${accCat}</h2><p>Compatible accessories</p></div></div>`;
+    html += `<div class="product-grid" id="acc_${accCat.replace(/[^a-zA-Z]/g,'')}">`;
+    items.forEach(m => html += productCard(m, accCat));
+    html += '</div>';
+  });
+
+  main.innerHTML = html;
+}
+
+function productCard(item, category) {
+  const inQuote = state.quote.find(q => q.part === item.p);
+  const qty = inQuote ? inQuote.qty : 1;
+  const cls = inQuote ? ' in-quote' : '';
+
+  return `<div class="product-card${cls}" data-pn="${item.p}" data-desc="${(item.d||'').toLowerCase()}">
+    <div class="product-top">
+      <div>
+        <div class="product-pn">${item.p}</div>
+        <span class="category-tag">${category}</span>
+      </div>
+      <div class="product-prices">
+        <div class="price-dealer">${fmt(item.c)}</div>
+        <div class="price-list">List: ${fmt(item.l)}</div>
+      </div>
+    </div>
+    <div class="product-desc">${item.d || '—'}</div>
+    <div class="product-actions">
+      <div class="qty-control">
+        <button class="qty-btn" onclick="adjQty('${item.p}',-1,this)">−</button>
+        <input class="qty-input" type="number" min="1" value="${qty}" id="qty_${item.p}" onchange="syncQty('${item.p}',this.value)">
+        <button class="qty-btn" onclick="adjQty('${item.p}',1,this)">+</button>
+      </div>
+      ${inQuote
+        ? `<button class="add-btn remove" onclick="removeFromQuote('${item.p}')">✕ Remove</button>
+           <span class="line-total">${fmt(item.c * qty)}</span>`
+        : `<button class="add-btn" onclick="addToQuote('${item.p}','${escape(item.d)}',${item.c},${item.l},'${category}')">+ Add to Quote</button>`
+      }
+    </div>
+  </div>`;
+}
+
+function adjQty(pn, delta, btn) {
+  const input = document.getElementById('qty_'+pn);
+  if (!input) return;
+  let val = parseInt(input.value) || 1;
+  val = Math.max(1, val + delta);
+  input.value = val;
+  syncQty(pn, val);
+}
+
+function syncQty(pn, val) {
+  val = Math.max(1, parseInt(val) || 1);
+  const item = state.quote.find(q => q.part === pn);
+  if (item) {
+    item.qty = val;
+    updateBadge();
+    // Re-render to update line totals
+    if (state.activeView === 'quote') renderQuote();
+    else renderMain();
+  }
+}
+
+function addToQuote(pn, desc, cost, list, category) {
+  if (state.quote.find(q => q.part === pn)) return;
+  const qtyEl = document.getElementById('qty_'+pn);
+  const qty = qtyEl ? Math.max(1, parseInt(qtyEl.value)||1) : 1;
+  state.quote.push({ part: pn, desc: unescape(desc), cost, list, qty, category });
+  updateBadge();
+  buildSidebar();
+  renderMain();
+}
+
+function removeFromQuote(pn) {
+  state.quote = state.quote.filter(q => q.part !== pn);
+  updateBadge();
+  buildSidebar();
+  if (state.activeView === 'quote') renderQuote();
+  else renderMain();
+}
+
+function updateBadge() {
+  const totalItems = state.quote.reduce((s,i) => s+i.qty, 0);
+  const totalCost = state.quote.reduce((s,i) => s + i.cost*i.qty, 0);
+  document.getElementById('quoteItemCount').textContent = totalItems;
+  document.getElementById('quoteTotalHeader').textContent = fmt(totalCost);
+}
+
+function filterProducts() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  document.querySelectorAll('.product-card').forEach(card => {
+    const pn = card.dataset.pn.toLowerCase();
+    const desc = card.dataset.desc || '';
+    card.style.display = (pn.includes(q) || desc.includes(q)) ? '' : 'none';
+  });
+}
+
+// ===== QUOTE VIEW =====
+function renderQuote() {
+  const main = document.getElementById('main');
+
+  let html = `<div class="section-header"><div><h2>📋 Equipment Quote</h2><p>${state.quote.length} line items</p></div></div>`;
+
+  // Quote info
+  html += `<div class="quote-info">
+    <div><label>Customer</label><input type="text" id="qi_customer" value="${state.quoteInfo.customer}" onchange="state.quoteInfo.customer=this.value"></div>
+    <div><label>Project Name</label><input type="text" id="qi_project" value="${state.quoteInfo.project}" onchange="state.quoteInfo.project=this.value"></div>
+    <div><label>Prepared By</label><input type="text" id="qi_prepby" value="${state.quoteInfo.preparedBy}" onchange="state.quoteInfo.preparedBy=this.value"></div>
+  </div>`;
+
+  html += `<div class="quote-panel">`;
+
+  if (state.quote.length === 0) {
+    html += `<div class="quote-empty"><div style="font-size:48px">📦</div><p>No items in quote yet.<br>Select a product series from the sidebar to get started.</p></div>`;
+  } else {
+    html += `<table class="quote-table">
+      <thead><tr>
+        <th>Part Number</th><th>Description</th><th>Category</th>
+        <th style="text-align:right">Dealer Cost</th><th style="text-align:right">List Price</th>
+        <th style="text-align:center">Qty</th>
+        <th style="text-align:right">Ext. Cost</th><th style="text-align:right">Ext. List</th>
+        <th></th>
+      </tr></thead><tbody>`;
+
+    let totalCost = 0, totalList = 0;
+    state.quote.forEach(item => {
+      const ec = item.cost * item.qty;
+      const el = item.list * item.qty;
+      totalCost += ec;
+      totalList += el;
+      html += `<tr>
+        <td class="pn-cell">${item.part}</td>
+        <td>${item.desc || '—'}</td>
+        <td><span class="category-tag">${item.category}</span></td>
+        <td class="num-cell">${fmt(item.cost)}</td>
+        <td class="num-cell">${fmt(item.list)}</td>
+        <td style="text-align:center">
+          <input class="qty-input" type="number" min="1" value="${item.qty}" style="width:50px;border:1px solid #ddd;border-radius:4px"
+            onchange="syncQty('${item.part}',this.value)">
+        </td>
+        <td class="num-cell">${fmt(ec)}</td>
+        <td class="num-cell">${fmt(el)}</td>
+        <td><button class="add-btn remove" style="padding:4px 8px;font-size:11px" onclick="removeFromQuote('${item.part}')">✕</button></td>
+      </tr>`;
+    });
+
+    html += `<tr class="total-row">
+      <td colspan="6" style="text-align:right">TOTAL</td>
+      <td class="num-cell">${fmt(totalCost)}</td>
+      <td class="num-cell">${fmt(totalList)}</td>
+      <td></td>
+    </tr>`;
+    html += `</tbody></table>`;
+  }
+  html += '</div>';
+
+  // Export buttons
+  if (state.quote.length > 0) {
+    html += `<div class="export-bar">
+      <button class="export-btn secondary" onclick="clearQuote()">🗑️ Clear All</button>
+      <button class="export-btn primary" onclick="exportExcel()">📊 Export to Excel</button>
+    </div>`;
+  }
+
+  main.innerHTML = html;
+}
+
+function clearQuote() {
+  if (!confirm('Clear all items from the quote?')) return;
+  state.quote = [];
+  updateBadge();
+  buildSidebar();
+  renderQuote();
+}
+
+// ===== EXCEL EXPORT =====
+function exportExcel() {
+  const wb = XLSX.utils.book_new();
+
+  // Header info
+  const quoteDate = new Date().toLocaleDateString();
+  const headerRows = [
+    ['KENWOOD LMR Equipment Quote'],
+    [''],
+    ['Customer:', state.quoteInfo.customer || ''],
+    ['Project:', state.quoteInfo.project || ''],
+    ['Prepared By:', state.quoteInfo.preparedBy || ''],
+    ['Date:', quoteDate],
+    ['Pricing:', 'November 2025 Price Guide'],
+    ['']
+  ];
+
+  // Column headers
+  const colHeaders = ['Part Number','Description','Category','Dealer Cost','List Price','Qty','Ext. Dealer Cost','Ext. List Price'];
+  headerRows.push(colHeaders);
+
+  // Data rows
+  let totalCost = 0, totalList = 0;
+  state.quote.forEach(item => {
+    const ec = Math.round(item.cost * item.qty * 100) / 100;
+    const el = Math.round(item.list * item.qty * 100) / 100;
+    totalCost += ec;
+    totalList += el;
+    headerRows.push([item.part, item.desc || '', item.category, item.cost, item.list, item.qty, ec, el]);
+  });
+
+  // Totals
+  headerRows.push([]);
+  headerRows.push(['','','','','TOTAL','', Math.round(totalCost*100)/100, Math.round(totalList*100)/100]);
+
+  const ws = XLSX.utils.aoa_to_sheet(headerRows);
+
+  // Column widths
+  ws['!cols'] = [
+    {wch:18},{wch:50},{wch:16},{wch:14},{wch:14},{wch:6},{wch:16},{wch:16}
+  ];
+
+  // Format currency cells
+  const dataStart = 9; // 0-indexed row where data starts (after header)
+  for (let r = dataStart; r < headerRows.length; r++) {
+    for (let c of [3,4,6,7]) {
+      const addr = XLSX.utils.encode_cell({r:r, c:c});
+      if (ws[addr] && typeof ws[addr].v === 'number') {
+        ws[addr].z = '$#,##0.00';
+      }
+    }
+  }
+
+  XLSX.utils.book_append_sheet(wb, ws, 'Quote');
+  const filename = `Kenwood_Quote_${(state.quoteInfo.customer||'Draft').replace(/[^a-zA-Z0-9]/g,'_')}_${quoteDate.replace(/\//g,'-')}.xlsx`;
+  XLSX.writeFile(wb, filename);
+}
+
+// ===== INIT =====
+function init() {
+  buildSidebar();
+  // Show welcome
+  const main = document.getElementById('main');
+  main.innerHTML = `
+    <div style="text-align:center;padding:80px 20px">
+      <div style="font-size:64px;margin-bottom:16px">📻</div>
+      <h2 style="font-size:24px;font-weight:700;color:var(--kw-dark);margin-bottom:8px">Kenwood LMR Equipment Configurator</h2>
+      <p style="color:var(--kw-muted);font-size:14px;max-width:500px;margin:0 auto;line-height:1.6">
+        Select an equipment series from the sidebar to begin building your quote.
+        Each series shows base models, compatible software features, and accessories.
+      </p>
+      <div style="display:flex;gap:20px;justify-content:center;margin-top:40px;flex-wrap:wrap">
+        <div style="background:var(--kw-card);border:1px solid var(--kw-border);border-radius:12px;padding:20px 30px;cursor:pointer"
+          onclick="selectSeries('Portable Radios','NX-5200/5300')">
+          <div style="font-size:32px">📻</div>
+          <div style="font-weight:600;margin-top:8px">Portables</div>
+          <div style="font-size:12px;color:var(--kw-muted)">6 series</div>
+        </div>
+        <div style="background:var(--kw-card);border:1px solid var(--kw-border);border-radius:12px;padding:20px 30px;cursor:pointer"
+          onclick="selectSeries('Mobile Radios','NX-5700/5800/5900')">
+          <div style="font-size:32px">🚔</div>
+          <div style="font-weight:600;margin-top:8px">Mobiles</div>
+          <div style="font-size:12px;color:var(--kw-muted)">4 series</div>
+        </div>
+        <div style="background:var(--kw-card);border:1px solid var(--kw-border);border-radius:12px;padding:20px 30px;cursor:pointer"
+          onclick="selectSeries('Repeaters','NXR-5700/5800/5900')">
+          <div style="font-size:32px">📡</div>
+          <div style="font-weight:600;margin-top:8px">Repeaters</div>
+          <div style="font-size:12px;color:var(--kw-muted)">3 series</div>
+        </div>
+      </div>
+    </div>`;
+}
+
+init();
+</script>
+</body>
+</html>
